@@ -1,4 +1,4 @@
-import type { User } from "../../generated/prisma/client.js";
+import type { RefreshToken, User } from "../../generated/prisma/client.js";
 import { prisma } from "../../db/prisma.js";
 
 type CreateUserInput = {
@@ -6,6 +6,13 @@ type CreateUserInput = {
   email: string;
   passwordHash: string;
   username: string;
+};
+
+type CreateRefreshTokenInput = {
+  expiresAt: Date;
+  tokenHash: string;
+  tokenId: string;
+  userId: string;
 };
 
 export async function createUserRecord(input: CreateUserInput): Promise<User> {
@@ -36,5 +43,65 @@ export async function findUserByEmail(email: string): Promise<User | null> {
 export async function findUserByUsername(username: string): Promise<User | null> {
   return prisma.user.findUnique({
     where: { username }
+  });
+}
+
+export async function findUserById(userId: string): Promise<User | null> {
+  return prisma.user.findUnique({
+    where: { id: userId }
+  });
+}
+
+export async function createRefreshTokenRecord(
+  input: CreateRefreshTokenInput
+): Promise<RefreshToken> {
+  return prisma.refreshToken.create({
+    data: {
+      expiresAt: input.expiresAt,
+      id: input.tokenId,
+      tokenHash: input.tokenHash,
+      userId: input.userId
+    }
+  });
+}
+
+export async function findRefreshTokenRecordById(
+  tokenId: string
+): Promise<RefreshToken | null> {
+  return prisma.refreshToken.findUnique({
+    where: { id: tokenId }
+  });
+}
+
+export async function rotateRefreshTokenRecord(
+  currentTokenId: string,
+  nextToken: CreateRefreshTokenInput
+): Promise<boolean> {
+  return prisma.$transaction(async (tx) => {
+    const revokedAt = new Date();
+    const revokeResult = await tx.refreshToken.updateMany({
+      where: {
+        id: currentTokenId,
+        revokedAt: null
+      },
+      data: {
+        revokedAt
+      }
+    });
+
+    if (revokeResult.count !== 1) {
+      return false;
+    }
+
+    await tx.refreshToken.create({
+      data: {
+        expiresAt: nextToken.expiresAt,
+        id: nextToken.tokenId,
+        tokenHash: nextToken.tokenHash,
+        userId: nextToken.userId
+      }
+    });
+
+    return true;
   });
 }

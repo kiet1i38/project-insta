@@ -12,6 +12,11 @@ const envSchema = z.object({
     .min(32)
     .default("cloneinsta_local_access_token_secret_change_me_123"),
   ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+  REFRESH_TOKEN_SECRET: z
+    .string()
+    .min(32)
+    .default("cloneinsta_local_refresh_token_secret_change_me_123"),
+  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(7),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(3001),
   CLIENT_ORIGIN: z

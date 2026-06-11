@@ -6,6 +6,8 @@ export const AUTH_EMAIL_IN_USE_CODE = "AUTH_EMAIL_IN_USE";
 export const AUTH_EMAIL_IN_USE_MESSAGE = "Email is already in use.";
 export const AUTH_IDENTIFIER_IN_USE_CODE = "AUTH_IDENTIFIER_IN_USE";
 export const AUTH_IDENTIFIER_IN_USE_MESSAGE = "Email or username is already in use.";
+export const AUTH_INVALID_SESSION_CODE = "AUTH_INVALID_SESSION";
+export const AUTH_INVALID_SESSION_MESSAGE = "Invalid session.";
 export const AUTH_USERNAME_IN_USE_CODE = "AUTH_USERNAME_IN_USE";
 export const AUTH_USERNAME_IN_USE_MESSAGE = "Username is already in use.";
 
@@ -34,5 +36,13 @@ export function createIdentifierInUseError(): AppError {
     409,
     AUTH_IDENTIFIER_IN_USE_CODE,
     AUTH_IDENTIFIER_IN_USE_MESSAGE
+  );
+}
+
+export function createInvalidSessionError(): AppError {
+  return new AppError(
+    401,
+    AUTH_INVALID_SESSION_CODE,
+    AUTH_INVALID_SESSION_MESSAGE
   );
 }
