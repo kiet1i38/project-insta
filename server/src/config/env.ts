@@ -7,6 +7,11 @@ const defaultTestDatabaseUrl =
   "postgresql://cloneinsta:cloneinsta_dev_password@localhost:5432/cloneinsta_test?schema=public";
 
 const envSchema = z.object({
+  ACCESS_TOKEN_SECRET: z
+    .string()
+    .min(32)
+    .default("cloneinsta_local_access_token_secret_change_me_123"),
+  ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(3001),
   CLIENT_ORIGIN: z
