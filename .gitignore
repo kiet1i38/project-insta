@@ -40,6 +40,7 @@ trace.zip
 # Local uploads and temp files
 server/uploads/*
 !server/uploads/.gitkeep
+server/src/generated/prisma/
 server/vitest.config.js
 uploads/
 tmp/

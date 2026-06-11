@@ -1,6 +1,11 @@
 import "dotenv/config";
 import { z } from "zod";
 
+const defaultDatabaseUrl =
+  "postgresql://cloneinsta:cloneinsta_dev_password@localhost:5432/cloneinsta?schema=public";
+const defaultTestDatabaseUrl =
+  "postgresql://cloneinsta:cloneinsta_dev_password@localhost:5432/cloneinsta_test?schema=public";
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(3001),
@@ -8,8 +13,8 @@ const envSchema = z.object({
     .string()
     .url()
     .default("http://localhost:5173"),
-  DATABASE_URL: z.string().optional(),
-  TEST_DATABASE_URL: z.string().optional(),
+  DATABASE_URL: z.string().url().default(defaultDatabaseUrl),
+  TEST_DATABASE_URL: z.string().url().default(defaultTestDatabaseUrl),
   LOCAL_UPLOAD_DIR: z.string().default("server/uploads")
 });
 

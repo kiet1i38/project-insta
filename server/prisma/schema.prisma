@@ -1,0 +1,190 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  BANNED
+}
+
+enum ReportStatus {
+  PENDING
+  RESOLVED
+  DISMISSED
+}
+
+enum ModerationActionType {
+  DISMISS
+  HIDE_POST
+  HIDE_COMMENT
+  BAN_USER
+  UNBAN_USER
+}
+
+model User {
+  id                 String             @id @default(uuid()) @db.Uuid
+  email              String             @unique @db.VarChar(320)
+  username           String             @unique @db.VarChar(30)
+  passwordHash       String
+  displayName        String?            @db.VarChar(50)
+  bio                String?            @db.VarChar(160)
+  avatarUrl          String?            @db.Text
+  role               UserRole           @default(USER)
+  status             UserStatus         @default(ACTIVE)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  auditLogs          AuditLog[]         @relation("AuditActor")
+  comments           Comment[]
+  followers          Follow[]           @relation("UserFollowers")
+  following          Follow[]           @relation("UserFollowing")
+  likes              Like[]
+  moderationActions  ModerationAction[] @relation("ModerationAdmin")
+  posts              Post[]
+  refreshTokens      RefreshToken[]
+  reportsFiled       Report[]           @relation("ReportReporter")
+  reportsTargetingMe Report[]           @relation("ReportTargetUser")
+
+  @@index([createdAt])
+}
+
+model RefreshToken {
+  id        String   @id @db.Uuid
+  userId    String   @db.Uuid
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Post {
+  id        String   @id @default(uuid()) @db.Uuid
+  authorId  String   @db.Uuid
+  imageUrl  String   @db.Text
+  caption   String?  @db.VarChar(2200)
+  isHidden  Boolean  @default(false)
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  comments  Comment[]
+  likes     Like[]
+  reports   Report[]
+
+  @@index([authorId])
+  @@index([createdAt])
+  @@index([deletedAt])
+}
+
+model Comment {
+  id        String   @id @default(uuid()) @db.Uuid
+  postId    String   @db.Uuid
+  authorId  String   @db.Uuid
+  content   String   @db.VarChar(1000)
+  isHidden  Boolean  @default(false)
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  reports   Report[]
+
+  @@index([postId])
+  @@index([authorId])
+  @@index([createdAt])
+  @@index([deletedAt])
+}
+
+model Like {
+  postId    String   @db.Uuid
+  userId    String   @db.Uuid
+  createdAt DateTime @default(now())
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+  @@index([createdAt])
+}
+
+model Follow {
+  followerId  String   @db.Uuid
+  followingId String   @db.Uuid
+  createdAt   DateTime @default(now())
+  follower    User     @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+  @@index([createdAt])
+}
+
+model Report {
+  id                String             @id @default(uuid()) @db.Uuid
+  reporterId        String             @db.Uuid
+  reportedPostId    String?            @db.Uuid
+  reportedCommentId String?            @db.Uuid
+  reportedUserId    String?            @db.Uuid
+  reason            String             @db.VarChar(100)
+  status            ReportStatus       @default(PENDING)
+  createdAt         DateTime           @default(now())
+  resolvedAt        DateTime?
+  moderationActions ModerationAction[]
+  reportedComment   Comment?           @relation(fields: [reportedCommentId], references: [id], onDelete: Restrict)
+  reportedPost      Post?              @relation(fields: [reportedPostId], references: [id], onDelete: Restrict)
+  reportedUser      User?              @relation("ReportTargetUser", fields: [reportedUserId], references: [id], onDelete: Restrict)
+  reporter          User               @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+
+  @@index([reporterId])
+  @@index([reportedPostId])
+  @@index([reportedCommentId])
+  @@index([reportedUserId])
+  @@index([status, createdAt])
+}
+
+model ModerationAction {
+  id        String               @id @default(uuid()) @db.Uuid
+  adminId   String               @db.Uuid
+  reportId  String               @db.Uuid
+  action    ModerationActionType
+  reason    String?              @db.VarChar(500)
+  createdAt DateTime             @default(now())
+  admin     User                 @relation("ModerationAdmin", fields: [adminId], references: [id], onDelete: Restrict)
+  report    Report               @relation(fields: [reportId], references: [id], onDelete: Restrict)
+
+  @@index([adminId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([reportId, createdAt])
+}
+
+model AuditLog {
+  id            String    @id @default(uuid()) @db.Uuid
+  actorId       String?   @db.Uuid
+  actorMetadata Json?
+  action        String    @db.VarChar(100)
+  entityType    String?   @db.VarChar(50)
+  entityId      String?   @db.VarChar(50)
+  ipAddress     String?   @db.VarChar(45)
+  userAgent     String?   @db.VarChar(512)
+  createdAt     DateTime  @default(now())
+  actor         User?     @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([entityType, entityId])
+}

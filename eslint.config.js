@@ -12,7 +12,8 @@ export default tseslint.config(
       "**/coverage/**",
       "**/node_modules/**",
       "graphify-out/**",
-      "server/uploads/**"
+      "server/uploads/**",
+      "server/src/generated/prisma/**"
     ]
   },
   js.configs.recommended,

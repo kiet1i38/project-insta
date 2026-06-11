@@ -32,9 +32,12 @@ docs/superpowers/
 
 server/uploads/*
 !server/uploads/.gitkeep
+server/src/generated/prisma/
 uploads/
 tmp/
 temp/
 *.sqlite
 *.sqlite3
 *.db
+
+plan.md
