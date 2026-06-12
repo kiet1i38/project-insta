@@ -435,6 +435,62 @@ a {
   max-width: 720px;
 }
 
+.search-page {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.search-form {
+  max-width: 720px;
+}
+
+.search-results-section {
+  display: grid;
+  gap: 1rem;
+}
+
+.search-results-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.search-result-card {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.search-result-header {
+  display: flex;
+  gap: 0.9rem;
+  align-items: center;
+}
+
+.search-result-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 1rem;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.search-result-avatar-fallback {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #0f62fe 0%, #38bdf8 100%);
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.search-result-bio {
+  margin: 0;
+  color: #4b5563;
+}
+
+.search-load-more {
+  justify-self: start;
+}
+
 .route-gate-panel h2 {
   margin: 0 0 0.75rem;
 }

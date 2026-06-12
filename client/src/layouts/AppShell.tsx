@@ -11,7 +11,8 @@ export function AppShell() {
     status === "authenticated"
       ? [
           { to: "/", label: "Feed" },
-          { to: "/profile", label: "Profile" }
+          { to: "/profile", label: "Profile" },
+          { to: "/search", label: "Search" }
         ]
       : [
           { to: "/", label: "Feed" },

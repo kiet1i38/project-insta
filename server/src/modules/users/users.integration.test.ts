@@ -290,4 +290,171 @@ describe("users me profile API", () => {
     expect(response.body.error.code).toBe("AUTH_UNAUTHORIZED");
     expect(response.body.error.message).toBe("Authentication required.");
   });
+
+  test("GET /api/v1/users/search returns a safe paginated search result for active users only", async () => {
+    const requester = await createUserFixture({
+      displayName: "Requester User",
+      email: "requester@example.com",
+      username: "requester_user"
+    });
+
+    await createUserFixture({
+      avatarUrl: "https://cdn.example.com/alice.png",
+      bio: "Builds the search slice carefully.",
+      displayName: "Alice Alpha",
+      email: "alice@example.com",
+      username: "alice_alpha"
+    });
+    await createUserFixture({
+      avatarUrl: "https://cdn.example.com/alina.png",
+      bio: "Second active result.",
+      displayName: "Alina Beta",
+      email: "alina@example.com",
+      username: "alina_beta"
+    });
+    await createUserFixture({
+      avatarUrl: "https://cdn.example.com/research.png",
+      bio: "Matches through display name only.",
+      displayName: "Ali Researcher",
+      email: "research@example.com",
+      username: "research_friend"
+    });
+    await createUserFixture({
+      displayName: "Ali Hidden",
+      email: "banned@example.com",
+      status: "BANNED",
+      username: "ali_hidden"
+    });
+    await createUserFixture({
+      displayName: "Bob Outside",
+      email: "bob@example.com",
+      username: "bob_outside"
+    });
+
+    const accessToken = await loginAndGetAccessToken(
+      requester.user.email,
+      requester.password
+    );
+
+    const firstPageResponse = await request(app)
+      .get("/api/v1/users/search")
+      .query({ limit: "2", q: "  ali  " })
+      .set("Origin", allowedOrigin)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(firstPageResponse.status).toBe(200);
+    expect(firstPageResponse.body.requestId).toMatch(/^req_/);
+    expect(firstPageResponse.headers["x-request-id"]).toBe(
+      firstPageResponse.body.requestId
+    );
+    expect(firstPageResponse.headers["access-control-allow-origin"]).toBe(
+      allowedOrigin
+    );
+    expect(firstPageResponse.body.users).toHaveLength(2);
+    expect(firstPageResponse.body.users).toEqual([
+      expect.objectContaining({
+        avatarUrl: "https://cdn.example.com/alice.png",
+        bio: "Builds the search slice carefully.",
+        displayName: "Alice Alpha",
+        username: "alice_alpha"
+      }),
+      expect.objectContaining({
+        avatarUrl: "https://cdn.example.com/alina.png",
+        bio: "Second active result.",
+        displayName: "Alina Beta",
+        username: "alina_beta"
+      })
+    ]);
+    expect(firstPageResponse.body.users[0].email).toBeUndefined();
+    expect(firstPageResponse.body.users[0].passwordHash).toBeUndefined();
+    expect(firstPageResponse.body.users[0].status).toBeUndefined();
+    expect(firstPageResponse.body.pageInfo).toMatchObject({
+      hasNextPage: true,
+      limit: 2,
+      query: "ali"
+    });
+    expect(firstPageResponse.body.pageInfo.nextCursor).toEqual(
+      expect.any(String)
+    );
+
+    const secondPageResponse = await request(app)
+      .get("/api/v1/users/search")
+      .query({
+        cursor: firstPageResponse.body.pageInfo.nextCursor as string,
+        limit: "2",
+        q: "ali"
+      })
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(secondPageResponse.status).toBe(200);
+    expect(secondPageResponse.body.users).toHaveLength(1);
+    expect(secondPageResponse.body.users[0]).toMatchObject({
+      avatarUrl: "https://cdn.example.com/research.png",
+      bio: "Matches through display name only.",
+      displayName: "Ali Researcher",
+      username: "research_friend"
+    });
+    expect(secondPageResponse.body.pageInfo).toMatchObject({
+      hasNextPage: false,
+      limit: 2,
+      nextCursor: null,
+      query: "ali"
+    });
+  });
+
+  test("GET /api/v1/users/search rejects an invalid pagination cursor", async () => {
+    const requester = await createUserFixture({
+      email: "cursor-owner@example.com",
+      username: "cursor_owner"
+    });
+    const accessToken = await loginAndGetAccessToken(
+      requester.user.email,
+      requester.password
+    );
+
+    const response = await request(app)
+      .get("/api/v1/users/search")
+      .query({
+        cursor: "not-a-real-cursor",
+        q: "ali"
+      })
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe("VALIDATION_ERROR");
+    expect(response.body.error.message).toBe("Invalid query string.");
+    expect(response.body.error.details).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "cursor"
+        })
+      ])
+    );
+  });
+
+  test("GET /api/v1/users/search requires an authenticated access token", async () => {
+    const response = await request(app)
+      .get("/api/v1/users/search")
+      .query({ q: "ali" });
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe("AUTH_UNAUTHORIZED");
+    expect(response.body.error.message).toBe("Authentication required.");
+  });
+
+  test("OPTIONS /api/v1/users/search returns CORS headers for the allowed client origin before a browser GET request", async () => {
+    const response = await request(app)
+      .options("/api/v1/users/search")
+      .set("Origin", allowedOrigin)
+      .set("Access-Control-Request-Method", "GET")
+      .set("Access-Control-Request-Headers", "authorization");
+
+    expect(response.status).toBe(204);
+    expect(response.headers["access-control-allow-origin"]).toBe(allowedOrigin);
+    expect(response.headers["access-control-allow-credentials"]).toBe("true");
+    expect(response.headers["access-control-allow-methods"]).toContain("GET");
+    expect(response.headers["access-control-allow-headers"]).toContain(
+      "Authorization"
+    );
+  });
 });

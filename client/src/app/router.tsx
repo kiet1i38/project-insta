@@ -6,6 +6,7 @@ import { LoginPage } from "../pages/LoginPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
 import { ProfilePage } from "../pages/ProfilePage";
 import { RegisterPage } from "../pages/RegisterPage";
+import { SearchPage } from "../pages/SearchPage";
 import { GuestRoute } from "./GuestRoute";
 import { ProtectedRoute } from "./ProtectedRoute";
 
@@ -17,6 +18,7 @@ export function AppRoutes() {
           <Route element={<FeedPage />} index />
           <Route element={<ProfilePage />} path="profile" />
           <Route element={<EditProfilePage />} path="profile/edit" />
+          <Route element={<SearchPage />} path="search" />
         </Route>
         <Route element={<GuestRoute />}>
           <Route element={<LoginPage />} path="login" />

@@ -1,6 +1,9 @@
 import type { Prisma } from "../../generated/prisma/client.js";
 import { prisma } from "../../db/prisma.js";
-import type { UpdateOwnProfileInput } from "./users.schema.js";
+import type {
+  SearchUsersCursor,
+  UpdateOwnProfileInput
+} from "./users.schema.js";
 
 const ownProfileSelect = {
   avatarUrl: true,
@@ -24,6 +27,18 @@ const ownProfileSelect = {
 
 export type OwnProfileRecord = Prisma.UserGetPayload<{
   select: typeof ownProfileSelect;
+}>;
+
+const searchUserSelect = {
+  avatarUrl: true,
+  bio: true,
+  displayName: true,
+  id: true,
+  username: true
+} satisfies Prisma.UserSelect;
+
+export type SearchUserRecord = Prisma.UserGetPayload<{
+  select: typeof searchUserSelect;
 }>;
 
 export async function findOwnProfileById(
@@ -53,5 +68,65 @@ export async function updateOwnProfileById(
       select: ownProfileSelect,
       where: { id: userId }
     });
+  });
+}
+
+export async function findUsersForSearch(input: {
+  cursor?: SearchUsersCursor;
+  limit: number;
+  query: string;
+}): Promise<SearchUserRecord[]> {
+  const paginationFilter = input.cursor
+    ? {
+        OR: [
+          {
+            username: {
+              gt: input.cursor.username
+            }
+          },
+          {
+            AND: [
+              {
+                username: input.cursor.username
+              },
+              {
+                id: {
+                  gt: input.cursor.id
+                }
+              }
+            ]
+          }
+        ]
+      }
+    : undefined;
+
+  return prisma.user.findMany({
+    orderBy: [{ username: "asc" }, { id: "asc" }],
+    select: searchUserSelect,
+    take: input.limit + 1,
+    where: {
+      AND: [
+        {
+          status: "ACTIVE"
+        },
+        {
+          OR: [
+            {
+              username: {
+                contains: input.query,
+                mode: "insensitive"
+              }
+            },
+            {
+              displayName: {
+                contains: input.query,
+                mode: "insensitive"
+              }
+            }
+          ]
+        },
+        ...(paginationFilter ? [paginationFilter] : [])
+      ]
+    }
   });
 }

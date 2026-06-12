@@ -1,8 +1,13 @@
-import { Navigate, Outlet } from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuthSession } from "../modules/auth/authSessionContext";
 
 export function GuestRoute() {
+  const location = useLocation();
   const { status } = useAuthSession();
+  const redirectTo =
+    typeof location.state?.from === "string" && location.state.from.length > 0
+      ? location.state.from
+      : "/";
 
   if (status === "bootstrapping") {
     return (
@@ -18,7 +23,7 @@ export function GuestRoute() {
   }
 
   if (status === "authenticated") {
-    return <Navigate replace to="/" />;
+    return <Navigate replace to={redirectTo} />;
   }
 
   return <Outlet />;

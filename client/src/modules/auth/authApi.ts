@@ -59,10 +59,35 @@ export type OwnProfileResponse = {
   requestId: string;
 };
 
+export type SearchUser = {
+  avatarUrl: string | null;
+  bio: string | null;
+  displayName: string | null;
+  id: string;
+  username: string;
+};
+
+export type SearchUsersResponse = {
+  pageInfo: {
+    hasNextPage: boolean;
+    limit: number;
+    nextCursor: string | null;
+    query: string;
+  };
+  requestId: string;
+  users: SearchUser[];
+};
+
 export type UpdateOwnProfileInput = {
   avatarUrl?: string | null;
   bio?: string | null;
   displayName?: string;
+};
+
+export type SearchUsersInput = {
+  cursor?: string | null;
+  limit?: number;
+  query: string;
 };
 
 export type RegisterResponse = {
@@ -277,5 +302,23 @@ export async function updateOwnProfile(
     body: input,
     includeAccessToken: true,
     method: "PATCH"
+  });
+}
+
+export async function searchUsers(
+  input: SearchUsersInput
+): Promise<SearchUsersResponse> {
+  const params = new URLSearchParams();
+
+  params.set("q", input.query.trim());
+  params.set("limit", String(input.limit ?? 10));
+
+  if (input.cursor) {
+    params.set("cursor", input.cursor);
+  }
+
+  return requestJson<SearchUsersResponse>(`/users/search?${params.toString()}`, {
+    includeAccessToken: true,
+    method: "GET"
   });
 }

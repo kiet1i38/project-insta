@@ -195,4 +195,42 @@ describe("App", () => {
     expect((headers as Headers).get("X-CSRF-Token")).toBe("csrf-logout");
     expect(document.cookie).not.toContain("cloneinsta_csrf=");
   });
+
+  it("returns a guest to the originally requested protected search route after login", async () => {
+    const user = userEvent.setup();
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (input === "http://localhost:3001/api/v1/auth/login") {
+        return jsonResponse({
+          accessToken: "access-token-search-return",
+          requestId: "req-login-search-return",
+          user: demoUser
+        });
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`);
+    });
+
+    window.history.pushState({}, "", "/search");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /log back into your photo-sharing workspace/i
+      })
+    ).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/email or username/i), "alice_demo");
+    await user.type(screen.getByLabelText(/^password$/i), "UserDemo123!");
+    await user.click(screen.getByRole("button", { name: /^log in$/i }));
+
+    expect(
+      await screen.findByRole("heading", { name: /search people/i })
+    ).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/search");
+    });
+  });
 });

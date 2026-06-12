@@ -1,7 +1,14 @@
 import type { RequestHandler } from "express";
 import { createUnauthorizedError } from "../auth/auth.errors.js";
-import { updateOwnProfileSchema } from "./users.schema.js";
-import { getOwnProfile, updateOwnProfile } from "./users.service.js";
+import {
+  searchUsersQuerySchema,
+  updateOwnProfileSchema
+} from "./users.schema.js";
+import {
+  getOwnProfile,
+  searchUsers,
+  updateOwnProfile
+} from "./users.service.js";
 
 function toValidationDetails(issues: Array<{ message: string; path: PropertyKey[] }>) {
   return issues.map((issue) => ({
@@ -21,6 +28,38 @@ export const getOwnProfileController: RequestHandler = async (req, res, next) =>
     res.status(200).json({
       profile,
       requestId: req.requestId
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const searchUsersController: RequestHandler = async (req, res, next) => {
+  const parsedQuery = searchUsersQuerySchema.safeParse(req.query);
+
+  if (!parsedQuery.success) {
+    res.status(400).json({
+      error: {
+        code: "VALIDATION_ERROR",
+        details: toValidationDetails(parsedQuery.error.issues),
+        message: "Invalid query string."
+      },
+      requestId: req.requestId
+    });
+    return;
+  }
+
+  try {
+    if (!req.authUser) {
+      throw createUnauthorizedError();
+    }
+
+    const result = await searchUsers(parsedQuery.data);
+
+    res.status(200).json({
+      pageInfo: result.pageInfo,
+      requestId: req.requestId,
+      users: result.users
     });
   } catch (error) {
     next(error);
