@@ -1,0 +1,250 @@
+import request from "supertest";
+import { app } from "../../app.js";
+import { prisma } from "../../db/prisma.js";
+import { resetDatabaseTables } from "../../test/testDatabase.js";
+import { hashPassword } from "../auth/password.js";
+
+async function createUserFixture(overrides: {
+  avatarUrl?: string | null;
+  bio?: string | null;
+  displayName?: string | null;
+  email?: string;
+  password?: string;
+  status?: "ACTIVE" | "BANNED";
+  username?: string;
+} = {}) {
+  const password = overrides.password ?? "Password123!";
+  const passwordHash = await hashPassword(password);
+
+  const user = await prisma.user.create({
+    data: {
+      avatarUrl: overrides.avatarUrl ?? null,
+      bio: overrides.bio ?? null,
+      displayName: overrides.displayName ?? "Profile User",
+      email: overrides.email ?? "profile@example.com",
+      passwordHash,
+      status: overrides.status ?? "ACTIVE",
+      username: overrides.username ?? "profile_user"
+    }
+  });
+
+  return { password, user };
+}
+
+async function loginAndGetAccessToken(identifier: string, password: string) {
+  const response = await request(app).post("/api/v1/auth/login").send({
+    identifier,
+    password
+  });
+
+  expect(response.status).toBe(200);
+  expect(response.body.accessToken).toEqual(expect.any(String));
+
+  return response.body.accessToken as string;
+}
+
+describe("users me profile API", () => {
+  beforeEach(async () => {
+    await resetDatabaseTables(prisma);
+  });
+
+  test("GET /api/v1/users/me returns the authenticated user's safe profile with counts", async () => {
+    const owner = await createUserFixture({
+      avatarUrl: "https://cdn.example.com/alice.png",
+      bio: "Building a clean student project.",
+      displayName: "Alice Owner",
+      email: "alice@example.com",
+      username: "alice_owner"
+    });
+    const followerOne = await createUserFixture({
+      email: "follower1@example.com",
+      username: "follower_one"
+    });
+    const followerTwo = await createUserFixture({
+      email: "follower2@example.com",
+      username: "follower_two"
+    });
+
+    await prisma.post.createMany({
+      data: [
+        {
+          authorId: owner.user.id,
+          caption: "First profile post",
+          imageUrl: "https://cdn.example.com/post-1.jpg"
+        },
+        {
+          authorId: owner.user.id,
+          caption: "Second profile post",
+          imageUrl: "https://cdn.example.com/post-2.jpg"
+        }
+      ]
+    });
+
+    await prisma.follow.createMany({
+      data: [
+        {
+          followerId: followerOne.user.id,
+          followingId: owner.user.id
+        },
+        {
+          followerId: followerTwo.user.id,
+          followingId: owner.user.id
+        },
+        {
+          followerId: owner.user.id,
+          followingId: followerOne.user.id
+        }
+      ]
+    });
+
+    const accessToken = await loginAndGetAccessToken(
+      owner.user.email,
+      owner.password
+    );
+
+    const response = await request(app)
+      .get("/api/v1/users/me")
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.requestId).toMatch(/^req_/);
+    expect(response.headers["x-request-id"]).toBe(response.body.requestId);
+    expect(response.body.profile).toMatchObject({
+      avatarUrl: "https://cdn.example.com/alice.png",
+      bio: "Building a clean student project.",
+      counts: {
+        followers: 2,
+        following: 1,
+        posts: 2
+      },
+      displayName: "Alice Owner",
+      email: "alice@example.com",
+      id: owner.user.id,
+      role: "USER",
+      status: "ACTIVE",
+      username: "alice_owner"
+    });
+    expect(response.body.profile.passwordHash).toBeUndefined();
+  });
+
+  test("GET /api/v1/users/me requires an authenticated access token", async () => {
+    const response = await request(app).get("/api/v1/users/me");
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe("AUTH_UNAUTHORIZED");
+    expect(response.body.error.message).toBe("Authentication required.");
+  });
+
+  test("PATCH /api/v1/users/me updates only the authenticated user's profile fields and returns a safe DTO", async () => {
+    const owner = await createUserFixture({
+      avatarUrl: "https://cdn.example.com/original.png",
+      bio: "Original bio",
+      displayName: "Original Name",
+      email: "owner@example.com",
+      username: "owner_user"
+    });
+    const otherUser = await createUserFixture({
+      displayName: "Second User",
+      email: "other@example.com",
+      username: "other_user"
+    });
+    const accessToken = await loginAndGetAccessToken(
+      owner.user.username,
+      owner.password
+    );
+
+    const response = await request(app)
+      .patch("/api/v1/users/me")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        avatarUrl: "",
+        bio: "  Updated bio for defense demo.  ",
+        displayName: "  Updated Owner Name  "
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.profile).toMatchObject({
+      avatarUrl: null,
+      bio: "Updated bio for defense demo.",
+      counts: {
+        followers: 0,
+        following: 0,
+        posts: 0
+      },
+      displayName: "Updated Owner Name",
+      email: "owner@example.com",
+      id: owner.user.id,
+      role: "USER",
+      status: "ACTIVE",
+      username: "owner_user"
+    });
+    expect(response.body.profile.passwordHash).toBeUndefined();
+
+    const updatedOwner = await prisma.user.findUniqueOrThrow({
+      where: { id: owner.user.id }
+    });
+    const untouchedOtherUser = await prisma.user.findUniqueOrThrow({
+      where: { id: otherUser.user.id }
+    });
+
+    expect(updatedOwner.displayName).toBe("Updated Owner Name");
+    expect(updatedOwner.bio).toBe("Updated bio for defense demo.");
+    expect(updatedOwner.avatarUrl).toBeNull();
+    expect(updatedOwner.passwordHash).toBe(owner.user.passwordHash);
+    expect(untouchedOtherUser.displayName).toBe("Second User");
+  });
+
+  test("PATCH /api/v1/users/me rejects server-managed or unexpected fields so one user cannot tamper with another profile", async () => {
+    const owner = await createUserFixture({
+      displayName: "Owner Name",
+      email: "owner@example.com",
+      username: "owner_user"
+    });
+    const otherUser = await createUserFixture({
+      displayName: "Victim User",
+      email: "victim@example.com",
+      username: "victim_user"
+    });
+    const accessToken = await loginAndGetAccessToken(
+      owner.user.email,
+      owner.password
+    );
+
+    const response = await request(app)
+      .patch("/api/v1/users/me")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        bio: "Trying to hack another profile",
+        id: otherUser.user.id,
+        passwordHash: "plain-text-evil",
+        role: "ADMIN",
+        status: "BANNED"
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe("VALIDATION_ERROR");
+    expect(response.body.error.message).toBe("Invalid request body.");
+
+    const refreshedOwner = await prisma.user.findUniqueOrThrow({
+      where: { id: owner.user.id }
+    });
+    const refreshedOtherUser = await prisma.user.findUniqueOrThrow({
+      where: { id: otherUser.user.id }
+    });
+
+    expect(refreshedOwner.bio).toBeNull();
+    expect(refreshedOwner.role).toBe("USER");
+    expect(refreshedOwner.status).toBe("ACTIVE");
+    expect(refreshedOtherUser.displayName).toBe("Victim User");
+  });
+
+  test("PATCH /api/v1/users/me requires an authenticated access token", async () => {
+    const response = await request(app).patch("/api/v1/users/me").send({
+      bio: "No token"
+    });
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe("AUTH_UNAUTHORIZED");
+    expect(response.body.error.message).toBe("Authentication required.");
+  });
+});

@@ -3,6 +3,7 @@ import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { requestIdMiddleware } from "./middleware/requestId.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { healthRouter } from "./modules/health/health.routes.js";
+import { usersRouter } from "./modules/users/users.routes.js";
 
 const app = express();
 
@@ -19,6 +20,7 @@ app.get("/", (req, res) => {
 
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/health", healthRouter);
+app.use("/api/v1/users", usersRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
