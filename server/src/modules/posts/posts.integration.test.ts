@@ -6,7 +6,10 @@ import { env } from "../../config/env.js";
 import { prisma } from "../../db/prisma.js";
 import { resetDatabaseTables } from "../../test/testDatabase.js";
 import { hashPassword } from "../auth/password.js";
-import { resolveLocalUploadDirectory } from "./upload.service.js";
+import {
+  ensureLocalUploadDirectory,
+  resolveLocalUploadDirectory
+} from "./upload.service.js";
 
 const allowedOrigin = "http://localhost:5173";
 const uploadDirectory = resolveLocalUploadDirectory(env.LOCAL_UPLOAD_DIR);
@@ -47,6 +50,7 @@ async function loginAndGetAccessToken(identifier: string, password: string) {
 }
 
 async function resetUploadFiles() {
+  await ensureLocalUploadDirectory(uploadDirectory);
   const uploadEntries = await readdir(uploadDirectory, { withFileTypes: true });
 
   await Promise.all(
@@ -198,5 +202,14 @@ describe("posts create API", () => {
     expect(response.headers["access-control-allow-headers"]).toContain(
       "Content-Type"
     );
+  });
+
+  test("resetUploadFiles tolerates a missing local upload directory so CI can start from a clean checkout", async () => {
+    await rm(uploadDirectory, { force: true, recursive: true });
+
+    await resetUploadFiles();
+
+    const directoryStats = await stat(uploadDirectory);
+    expect(directoryStats.isDirectory()).toBe(true);
   });
 });
