@@ -4,6 +4,8 @@ import { prisma } from "../../db/prisma.js";
 import { resetDatabaseTables } from "../../test/testDatabase.js";
 import { hashPassword } from "../auth/password.js";
 
+const allowedOrigin = "http://localhost:5173";
+
 async function createUserFixture(overrides: {
   avatarUrl?: string | null;
   bio?: string | null;
@@ -133,6 +135,47 @@ describe("users me profile API", () => {
     expect(response.status).toBe(401);
     expect(response.body.error.code).toBe("AUTH_UNAUTHORIZED");
     expect(response.body.error.message).toBe("Authentication required.");
+  });
+
+  test("OPTIONS /api/v1/users/me returns CORS headers for the allowed client origin before a browser PATCH request", async () => {
+    const response = await request(app)
+      .options("/api/v1/users/me")
+      .set("Origin", allowedOrigin)
+      .set("Access-Control-Request-Method", "PATCH")
+      .set("Access-Control-Request-Headers", "authorization,content-type");
+
+    expect(response.status).toBe(204);
+    expect(response.headers["access-control-allow-origin"]).toBe(allowedOrigin);
+    expect(response.headers["access-control-allow-credentials"]).toBe("true");
+    expect(response.headers["access-control-allow-methods"]).toContain("PATCH");
+    expect(response.headers["access-control-allow-methods"]).toContain("GET");
+    expect(response.headers["access-control-allow-headers"]).toContain(
+      "Authorization"
+    );
+    expect(response.headers["access-control-allow-headers"]).toContain(
+      "Content-Type"
+    );
+  });
+
+  test("GET /api/v1/users/me includes CORS headers for the allowed client origin on a bearer-token browser request", async () => {
+    const owner = await createUserFixture({
+      email: "cors-owner@example.com",
+      username: "cors_owner"
+    });
+    const accessToken = await loginAndGetAccessToken(
+      owner.user.email,
+      owner.password
+    );
+
+    const response = await request(app)
+      .get("/api/v1/users/me")
+      .set("Origin", allowedOrigin)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.headers["access-control-allow-origin"]).toBe(allowedOrigin);
+    expect(response.headers["access-control-allow-credentials"]).toBe("true");
+    expect(response.headers["vary"]).toContain("Origin");
   });
 
   test("PATCH /api/v1/users/me updates only the authenticated user's profile fields and returns a safe DTO", async () => {

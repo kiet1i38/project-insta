@@ -23,7 +23,7 @@ export function FeedPage() {
         </article>
         <article className="mini-card">
           <h3>Next slice</h3>
-          <p>Profile read/update and user-safe DTO wiring can now build on top of the guarded session layer.</p>
+          <p>Profile UI now lives at `/profile`, so the next major content slices can focus on posts, upload, and feed data instead of session plumbing.</p>
         </article>
       </div>
     </section>

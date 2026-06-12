@@ -1,0 +1,237 @@
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import App from "../App";
+
+const demoUser = {
+  createdAt: "2026-06-12T10:00:00.000Z",
+  displayName: "Student Demo",
+  email: "student.demo@example.com",
+  id: "user-123",
+  role: "USER" as const,
+  status: "ACTIVE" as const,
+  updatedAt: "2026-06-12T10:00:00.000Z",
+  username: "student_demo"
+};
+
+const initialProfile = {
+  avatarUrl: "https://cdn.example.com/student-demo.png",
+  bio: "Building CloneInsta slice by slice.",
+  counts: {
+    followers: 12,
+    following: 7,
+    posts: 0
+  },
+  createdAt: demoUser.createdAt,
+  displayName: demoUser.displayName,
+  email: demoUser.email,
+  id: demoUser.id,
+  role: demoUser.role,
+  status: demoUser.status,
+  updatedAt: demoUser.updatedAt,
+  username: demoUser.username
+};
+
+const updatedProfile = {
+  ...initialProfile,
+  avatarUrl: "https://cdn.example.com/student-demo-updated.png",
+  bio: "Updated bio for the profile-edit slice.",
+  displayName: "Updated Student Demo"
+};
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    headers: {
+      "Content-Type": "application/json"
+    },
+    status
+  });
+}
+
+afterEach(() => {
+  document.cookie =
+    "cloneinsta_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+  vi.restoreAllMocks();
+  window.history.pushState({}, "", "/");
+});
+
+describe("Profile UI", () => {
+  it("shows the authenticated user's profile details, counts, and empty-post state on /profile", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(
+      async (input, init) => {
+        if (input === "http://localhost:3001/api/v1/auth/refresh") {
+          return jsonResponse({
+            accessToken: "profile-access-token",
+            requestId: "req-profile-refresh",
+            user: demoUser
+          });
+        }
+
+        if (
+          input === "http://localhost:3001/api/v1/users/me" &&
+          init?.method === "GET"
+        ) {
+          return jsonResponse({
+            profile: initialProfile,
+            requestId: "req-profile-get"
+          });
+        }
+
+        throw new Error(`Unexpected fetch request: ${String(input)}`);
+      }
+    );
+
+    document.cookie = "cloneinsta_csrf=csrf-profile; path=/";
+    window.history.pushState({}, "", "/profile");
+
+    render(<App />);
+
+    expect(
+      await screen.findByText(/building cloneinsta slice by slice\./i)
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /your profile/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^profile$/i })).toHaveAttribute(
+      "aria-current",
+      "page"
+    );
+    expect(screen.getAllByText(/@student_demo/i)).toHaveLength(2);
+    expect(screen.getByText(/^12$/)).toBeInTheDocument();
+    expect(screen.getByText(/^7$/)).toBeInTheDocument();
+    expect(screen.getByText(/^0$/)).toBeInTheDocument();
+    expect(screen.getByText(/^followers$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^following$/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /^posts$/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/no posts yet\. create your first post in the upcoming post slice\./i)
+    ).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "http://localhost:3001/api/v1/users/me",
+        expect.objectContaining({
+          credentials: "include",
+          method: "GET"
+        })
+      );
+    });
+
+    const profileInit = fetchSpy.mock.calls[1]?.[1];
+    const profileHeaders = profileInit?.headers as Headers;
+
+    expect(profileHeaders).toBeInstanceOf(Headers);
+    expect(profileHeaders.get("Authorization")).toBe(
+      "Bearer profile-access-token"
+    );
+  });
+
+  it("lets the user open /profile/edit, save updates, and return to the refreshed profile view", async () => {
+    const user = userEvent.setup();
+    let hasPatchedProfile = false;
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(
+      async (input, init) => {
+        if (input === "http://localhost:3001/api/v1/auth/refresh") {
+          return jsonResponse({
+            accessToken: "profile-access-token",
+            requestId: "req-profile-refresh",
+            user: demoUser
+          });
+        }
+
+        if (
+          input === "http://localhost:3001/api/v1/users/me" &&
+          init?.method === "PATCH"
+        ) {
+          hasPatchedProfile = true;
+          return jsonResponse({
+            profile: updatedProfile,
+            requestId: "req-profile-patch"
+          });
+        }
+
+        if (
+          input === "http://localhost:3001/api/v1/users/me" &&
+          init?.method === "GET"
+        ) {
+          return jsonResponse({
+            profile: hasPatchedProfile ? updatedProfile : initialProfile,
+            requestId: hasPatchedProfile
+              ? "req-profile-get-updated"
+              : "req-profile-get-initial"
+          });
+        }
+
+        throw new Error(`Unexpected fetch request: ${String(input)}`);
+      }
+    );
+
+    document.cookie = "cloneinsta_csrf=csrf-profile; path=/";
+    window.history.pushState({}, "", "/profile");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("link", { name: /edit profile/i })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /your profile/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("link", { name: /edit profile/i }));
+
+    expect(
+      await screen.findByRole("heading", { name: /edit your profile/i })
+    ).toBeInTheDocument();
+
+    const displayNameInput = screen.getByLabelText(/display name/i);
+    const bioInput = screen.getByLabelText(/^bio$/i);
+    const avatarInput = screen.getByLabelText(/avatar url/i);
+
+    await user.clear(displayNameInput);
+    await user.type(displayNameInput, "  Updated Student Demo  ");
+    await user.clear(bioInput);
+    await user.type(bioInput, "  Updated bio for the profile-edit slice.  ");
+    await user.clear(avatarInput);
+    await user.type(
+      avatarInput,
+      "https://cdn.example.com/student-demo-updated.png"
+    );
+    await user.click(screen.getByRole("button", { name: /save profile/i }));
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/profile");
+    });
+
+    expect(await screen.findByText(/profile updated\./i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /your profile/i })).toBeInTheDocument();
+    expect(screen.getByText(/updated student demo/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/updated bio for the profile-edit slice\./i)
+    ).toBeInTheDocument();
+
+    const patchCall = fetchSpy.mock.calls.find(
+      ([requestInput, requestInit]) =>
+        requestInput === "http://localhost:3001/api/v1/users/me" &&
+        requestInit?.method === "PATCH"
+    );
+
+    expect(patchCall).toBeDefined();
+
+    const patchInit = patchCall?.[1];
+    const patchHeaders = patchInit?.headers as Headers;
+    const patchBody = JSON.parse((patchInit?.body as string) ?? "{}") as {
+      avatarUrl?: string;
+      bio?: string;
+      displayName?: string;
+    };
+
+    expect(patchHeaders).toBeInstanceOf(Headers);
+    expect(patchHeaders.get("Authorization")).toBe(
+      "Bearer profile-access-token"
+    );
+    expect(patchBody).toEqual({
+      avatarUrl: "https://cdn.example.com/student-demo-updated.png",
+      bio: "Updated bio for the profile-edit slice.",
+      displayName: "Updated Student Demo"
+    });
+  });
+});

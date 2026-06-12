@@ -9,7 +9,10 @@ export function AppShell() {
   const [logoutMessage, setLogoutMessage] = useState<string | null>(null);
   const navItems =
     status === "authenticated"
-      ? [{ to: "/", label: "Feed" }]
+      ? [
+          { to: "/", label: "Feed" },
+          { to: "/profile", label: "Profile" }
+        ]
       : [
           { to: "/", label: "Feed" },
           { to: "/login", label: "Login" },

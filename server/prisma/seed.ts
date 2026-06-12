@@ -23,6 +23,32 @@ const demoIds = {
   adminAuditLog: "60000000-0000-4000-8000-000000000002"
 } as const;
 
+function createDemoAvatarDataUrl(initials: string, background: string): string {
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-label="${initials} avatar">
+      <rect width="160" height="160" rx="36" fill="${background}" />
+      <text
+        x="50%"
+        y="55%"
+        text-anchor="middle"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="56"
+        fill="#ffffff"
+      >
+        ${initials}
+      </text>
+    </svg>
+  `.trim();
+
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+const demoAvatarUrls = {
+  admin: createDemoAvatarDataUrl("AD", "#0f172a"),
+  alice: createDemoAvatarDataUrl("AL", "#2563eb"),
+  bob: createDemoAvatarDataUrl("BO", "#0f766e")
+} as const;
+
 export type SeedSummary = {
   users: number;
   posts: number;
@@ -46,7 +72,7 @@ export async function seedDatabase(client: PrismaClient = prisma): Promise<SeedS
       passwordHash: adminPasswordHash,
       displayName: "CloneInsta Admin",
       bio: "Demo admin account for local moderation checks.",
-      avatarUrl: "https://images.example.com/admin-demo.jpg",
+      avatarUrl: demoAvatarUrls.admin,
       role: "ADMIN",
       status: "ACTIVE"
     },
@@ -57,7 +83,7 @@ export async function seedDatabase(client: PrismaClient = prisma): Promise<SeedS
       passwordHash: adminPasswordHash,
       displayName: "CloneInsta Admin",
       bio: "Demo admin account for local moderation checks.",
-      avatarUrl: "https://images.example.com/admin-demo.jpg",
+      avatarUrl: demoAvatarUrls.admin,
       role: "ADMIN",
       status: "ACTIVE"
     }
@@ -70,7 +96,7 @@ export async function seedDatabase(client: PrismaClient = prisma): Promise<SeedS
       passwordHash: userPasswordHash,
       displayName: "Alice Demo",
       bio: "Demo photographer account.",
-      avatarUrl: "https://images.example.com/alice-demo.jpg",
+      avatarUrl: demoAvatarUrls.alice,
       role: "USER",
       status: "ACTIVE"
     },
@@ -81,7 +107,7 @@ export async function seedDatabase(client: PrismaClient = prisma): Promise<SeedS
       passwordHash: userPasswordHash,
       displayName: "Alice Demo",
       bio: "Demo photographer account.",
-      avatarUrl: "https://images.example.com/alice-demo.jpg",
+      avatarUrl: demoAvatarUrls.alice,
       role: "USER",
       status: "ACTIVE"
     }
@@ -94,7 +120,7 @@ export async function seedDatabase(client: PrismaClient = prisma): Promise<SeedS
       passwordHash: userPasswordHash,
       displayName: "Bob Demo",
       bio: "Demo community account.",
-      avatarUrl: "https://images.example.com/bob-demo.jpg",
+      avatarUrl: demoAvatarUrls.bob,
       role: "USER",
       status: "ACTIVE"
     },
@@ -105,7 +131,7 @@ export async function seedDatabase(client: PrismaClient = prisma): Promise<SeedS
       passwordHash: userPasswordHash,
       displayName: "Bob Demo",
       bio: "Demo community account.",
-      avatarUrl: "https://images.example.com/bob-demo.jpg",
+      avatarUrl: demoAvatarUrls.bob,
       role: "USER",
       status: "ACTIVE"
     }

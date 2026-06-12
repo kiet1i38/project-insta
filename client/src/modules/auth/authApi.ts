@@ -1,3 +1,5 @@
+import { getAccessToken } from "./accessTokenStore";
+
 const defaultApiBaseUrl = "http://localhost:3001/api/v1";
 
 const apiBaseUrl = (
@@ -32,6 +34,35 @@ export type AuthSessionResponse = {
   accessToken: string;
   requestId: string;
   user: AuthUser;
+};
+
+export type OwnProfile = {
+  avatarUrl: string | null;
+  bio: string | null;
+  counts: {
+    followers: number;
+    following: number;
+    posts: number;
+  };
+  createdAt: string;
+  displayName: string | null;
+  email: string;
+  id: string;
+  role: "USER" | "ADMIN";
+  status: "ACTIVE" | "BANNED";
+  updatedAt: string;
+  username: string;
+};
+
+export type OwnProfileResponse = {
+  profile: OwnProfile;
+  requestId: string;
+};
+
+export type UpdateOwnProfileInput = {
+  avatarUrl?: string | null;
+  bio?: string | null;
+  displayName?: string;
 };
 
 export type RegisterResponse = {
@@ -112,8 +143,9 @@ async function requestJson<T>(
   path: string,
   options: {
     body?: unknown;
+    includeAccessToken?: boolean;
     includeCsrf?: boolean;
-    method?: "GET" | "POST";
+    method?: "GET" | "PATCH" | "POST";
   } = {}
 ): Promise<T> {
   const headers = new Headers();
@@ -127,6 +159,14 @@ async function requestJson<T>(
 
     if (csrfToken) {
       headers.set("X-CSRF-Token", csrfToken);
+    }
+  }
+
+  if (options.includeAccessToken) {
+    const accessToken = getAccessToken();
+
+    if (accessToken) {
+      headers.set("Authorization", `Bearer ${accessToken}`);
     }
   }
 
@@ -221,4 +261,21 @@ export async function logoutAuthSession(): Promise<void> {
       jsonBody?.requestId ?? null
     );
   }
+}
+
+export async function getOwnProfile(): Promise<OwnProfileResponse> {
+  return requestJson<OwnProfileResponse>("/users/me", {
+    includeAccessToken: true,
+    method: "GET"
+  });
+}
+
+export async function updateOwnProfile(
+  input: UpdateOwnProfileInput
+): Promise<OwnProfileResponse> {
+  return requestJson<OwnProfileResponse>("/users/me", {
+    body: input,
+    includeAccessToken: true,
+    method: "PATCH"
+  });
 }

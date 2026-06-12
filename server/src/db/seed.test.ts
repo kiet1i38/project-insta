@@ -66,6 +66,11 @@ describe.sequential("database seed", () => {
         email: "admin@cloneinsta.example"
       }
     });
+    const aliceUser = await prisma.user.findUnique({
+      where: {
+        email: "alice@cloneinsta.example"
+      }
+    });
 
     expect(adminUser).toMatchObject({
       email: "admin@cloneinsta.example",
@@ -76,6 +81,8 @@ describe.sequential("database seed", () => {
     expect(adminUser?.passwordHash).toBeTruthy();
     expect(adminUser?.passwordHash).not.toBe("AdminDemo123!");
     expect(adminUser?.passwordHash).toMatch(/^\$2[aby]\$/);
+    expect(adminUser?.avatarUrl).toMatch(/^data:image\/svg\+xml;/);
+    expect(aliceUser?.avatarUrl).toMatch(/^data:image\/svg\+xml;/);
 
     const pendingReport = await prisma.report.findFirst({
       where: {
