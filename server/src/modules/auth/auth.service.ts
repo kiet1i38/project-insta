@@ -7,6 +7,8 @@ import {
   findUserById,
   findUserByIdentifier,
   findUserByUsername,
+  revokeRefreshTokenFamily,
+  revokeRefreshTokenRecord,
   rotateRefreshTokenRecord
 } from "./auth.repository.js";
 import {
@@ -79,6 +81,7 @@ async function createAuthSession(user: User): Promise<AuthSessionDto> {
 
   await createRefreshTokenRecord({
     expiresAt: refreshTokenSession.expiresAt,
+    familyId: refreshTokenSession.tokenId,
     tokenHash: refreshTokenSession.tokenHash,
     tokenId: refreshTokenSession.tokenId,
     userId: user.id
@@ -154,13 +157,20 @@ export async function refreshUserSession(
 
   const storedToken = await findRefreshTokenRecordById(verifiedToken.tokenId);
 
-  if (
-    !storedToken ||
-    storedToken.userId !== verifiedToken.userId ||
-    storedToken.revokedAt !== null ||
-    storedToken.expiresAt.getTime() <= Date.now() ||
-    !verifyRefreshTokenHash(providedRefreshToken, storedToken.tokenHash)
-  ) {
+  if (!storedToken || storedToken.userId !== verifiedToken.userId) {
+    throw createInvalidSessionError();
+  }
+
+  if (!verifyRefreshTokenHash(providedRefreshToken, storedToken.tokenHash)) {
+    throw createInvalidSessionError();
+  }
+
+  if (storedToken.revokedAt !== null) {
+    await revokeRefreshTokenFamily(storedToken.familyId);
+    throw createInvalidSessionError();
+  }
+
+  if (storedToken.expiresAt.getTime() <= Date.now()) {
     throw createInvalidSessionError();
   }
 
@@ -173,6 +183,7 @@ export async function refreshUserSession(
   const nextRefreshToken = await issueRefreshToken(user.id);
   const rotated = await rotateRefreshTokenRecord(storedToken.id, {
     expiresAt: nextRefreshToken.expiresAt,
+    familyId: storedToken.familyId,
     tokenHash: nextRefreshToken.tokenHash,
     tokenId: nextRefreshToken.tokenId,
     userId: user.id
@@ -188,4 +199,34 @@ export async function refreshUserSession(
     refreshTokenExpiresAt: nextRefreshToken.expiresAt,
     user: toAuthUserDto(user)
   };
+}
+
+export async function logoutUserSession(
+  providedRefreshToken: string | null
+): Promise<void> {
+  if (!providedRefreshToken) {
+    return;
+  }
+
+  let verifiedToken;
+
+  try {
+    verifiedToken = await verifyRefreshToken(providedRefreshToken);
+  } catch {
+    return;
+  }
+
+  const storedToken = await findRefreshTokenRecordById(verifiedToken.tokenId);
+
+  if (
+    !storedToken ||
+    storedToken.userId !== verifiedToken.userId ||
+    storedToken.revokedAt !== null ||
+    storedToken.expiresAt.getTime() <= Date.now() ||
+    !verifyRefreshTokenHash(providedRefreshToken, storedToken.tokenHash)
+  ) {
+    return;
+  }
+
+  await revokeRefreshTokenRecord(storedToken.id);
 }

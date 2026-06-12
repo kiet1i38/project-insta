@@ -1,8 +1,15 @@
-import { RouterProvider } from "react-router-dom";
-import { appRouter } from "./app/router";
+import { BrowserRouter } from "react-router-dom";
+import { AppRoutes } from "./app/router";
+import { AuthSessionProvider } from "./modules/auth/authSession";
 
 function App() {
-  return <RouterProvider router={appRouter} />;
+  return (
+    <AuthSessionProvider>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </AuthSessionProvider>
+  );
 }
 
 export default App;

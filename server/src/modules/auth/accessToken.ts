@@ -1,4 +1,4 @@
-import { SignJWT } from "jose";
+import { jwtVerify, SignJWT } from "jose";
 import type { User } from "../../generated/prisma/client.js";
 import { env } from "../../config/env.js";
 
@@ -15,4 +15,20 @@ export async function issueAccessToken(user: User): Promise<string> {
     .setIssuedAt()
     .setExpirationTime(`${env.ACCESS_TOKEN_TTL_SECONDS}s`)
     .sign(accessTokenSecret);
+}
+
+export async function verifyAccessToken(
+  token: string
+): Promise<{ userId: string }> {
+  const { payload } = await jwtVerify(token, accessTokenSecret, {
+    algorithms: ["HS256"]
+  });
+
+  if (typeof payload.sub !== "string") {
+    throw new Error("Access token payload is invalid.");
+  }
+
+  return {
+    userId: payload.sub
+  };
 }

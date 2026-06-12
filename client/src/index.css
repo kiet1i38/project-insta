@@ -57,6 +57,29 @@ a {
   flex-wrap: wrap;
 }
 
+.session-card {
+  padding: 1rem;
+  border: 1px solid rgba(125, 211, 252, 0.28);
+  border-radius: 1rem;
+  background: rgba(10, 20, 35, 0.38);
+}
+
+.session-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.2rem;
+}
+
+.session-copy {
+  margin: 0;
+  color: rgba(248, 251, 255, 0.82);
+}
+
+.session-status {
+  margin: 1rem 0 0;
+  color: #fecaca;
+  font-weight: 600;
+}
+
 .nav-link {
   padding: 0.75rem 1rem;
   border-radius: 999px;
@@ -87,6 +110,152 @@ a {
   box-shadow: 0 24px 80px rgba(17, 24, 39, 0.08);
 }
 
+.auth-page {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 420px);
+  align-items: start;
+}
+
+.auth-copy h2 {
+  margin: 0 0 0.75rem;
+}
+
+.auth-copy p:not(.eyebrow) {
+  margin: 0;
+  color: #4b5563;
+}
+
+.auth-form {
+  display: grid;
+  gap: 1rem;
+  padding: 1.5rem;
+  border: 1px solid #dbe5f0;
+  border-radius: 1rem;
+  background: #f8fbff;
+}
+
+.form-field {
+  display: grid;
+  gap: 0.45rem;
+  font-weight: 600;
+  color: #172033;
+}
+
+.form-field span {
+  font-size: 0.95rem;
+}
+
+.form-field input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid #c7d2e0;
+  border-radius: 0.9rem;
+  font: inherit;
+  color: #111827;
+  background: #ffffff;
+}
+
+.form-field input:focus {
+  outline: 2px solid #0f62fe;
+  outline-offset: 2px;
+  border-color: #0f62fe;
+}
+
+.field-error {
+  color: #b42318;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.auth-actions {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.form-status {
+  margin: 0;
+  padding: 0.8rem 0.9rem;
+  border-radius: 0.9rem;
+  font-weight: 600;
+}
+
+.form-status[data-tone="error"] {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #b42318;
+}
+
+.form-status[data-tone="info"] {
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.primary-button {
+  min-height: 46px;
+  padding: 0.8rem 1rem;
+  border: 0;
+  border-radius: 0.9rem;
+  background: #0f62fe;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary-button:disabled {
+  cursor: wait;
+  opacity: 0.75;
+}
+
+.primary-button:hover {
+  background: #0b55de;
+}
+
+.primary-button:focus-visible {
+  outline: 2px solid #0f62fe;
+  outline-offset: 2px;
+}
+
+.secondary-button {
+  margin-top: 1rem;
+  min-height: 44px;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(125, 211, 252, 0.45);
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fbff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.secondary-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.secondary-button:hover {
+  background: rgba(125, 211, 252, 0.18);
+}
+
+.secondary-button:focus-visible {
+  outline: 2px solid #7dd3fc;
+  outline-offset: 2px;
+}
+
+.auth-link-row {
+  margin: 0;
+  color: #4b5563;
+}
+
+.auth-link-row a {
+  color: #0b55de;
+  font-weight: 700;
+}
+
 .card-grid {
   display: grid;
   gap: 1rem;
@@ -99,6 +268,10 @@ a {
   border: 1px solid #dbe5f0;
   border-radius: 1rem;
   background: #f8fbff;
+}
+
+.route-gate-panel h2 {
+  margin: 0 0 0.75rem;
 }
 
 .button-link {
@@ -118,5 +291,9 @@ a {
 
   .content {
     padding: 1rem;
+  }
+
+  .auth-page {
+    grid-template-columns: 1fr;
   }
 }

@@ -102,6 +102,18 @@ export function setRefreshTokenCookie(
   res.cookie(refreshTokenCookieName, token, cookieOptions);
 }
 
+export function clearRefreshTokenCookie(res: Response): void {
+  const cookieOptions: CookieOptions = {
+    expires: new Date(0),
+    httpOnly: true,
+    path: "/",
+    sameSite: "strict",
+    secure: env.NODE_ENV === "production"
+  };
+
+  res.cookie(refreshTokenCookieName, "", cookieOptions);
+}
+
 export function readRefreshTokenCookie(cookieHeader: string | undefined): string | null {
   if (!cookieHeader) {
     return null;

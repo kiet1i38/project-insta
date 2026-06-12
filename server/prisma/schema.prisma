@@ -60,6 +60,7 @@ model User {
 model RefreshToken {
   id        String   @id @db.Uuid
   userId    String   @db.Uuid
+  familyId  String   @db.Uuid
   tokenHash String
   expiresAt DateTime
   revokedAt DateTime?
@@ -67,6 +68,8 @@ model RefreshToken {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([familyId])
+  @@index([userId, familyId])
   @@index([expiresAt])
 }
 

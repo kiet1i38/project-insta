@@ -10,6 +10,7 @@ type CreateUserInput = {
 
 type CreateRefreshTokenInput = {
   expiresAt: Date;
+  familyId: string;
   tokenHash: string;
   tokenId: string;
   userId: string;
@@ -58,6 +59,7 @@ export async function createRefreshTokenRecord(
   return prisma.refreshToken.create({
     data: {
       expiresAt: input.expiresAt,
+      familyId: input.familyId,
       id: input.tokenId,
       tokenHash: input.tokenHash,
       userId: input.userId
@@ -96,6 +98,7 @@ export async function rotateRefreshTokenRecord(
     await tx.refreshToken.create({
       data: {
         expiresAt: nextToken.expiresAt,
+        familyId: nextToken.familyId,
         id: nextToken.tokenId,
         tokenHash: nextToken.tokenHash,
         userId: nextToken.userId
@@ -103,5 +106,29 @@ export async function rotateRefreshTokenRecord(
     });
 
     return true;
+  });
+}
+
+export async function revokeRefreshTokenFamily(familyId: string): Promise<void> {
+  await prisma.refreshToken.updateMany({
+    where: {
+      familyId,
+      revokedAt: null
+    },
+    data: {
+      revokedAt: new Date()
+    }
+  });
+}
+
+export async function revokeRefreshTokenRecord(tokenId: string): Promise<void> {
+  await prisma.refreshToken.updateMany({
+    where: {
+      id: tokenId,
+      revokedAt: null
+    },
+    data: {
+      revokedAt: new Date()
+    }
   });
 }

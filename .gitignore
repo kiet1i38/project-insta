@@ -56,6 +56,7 @@ docs/superpowers/
 graphify-out/
 .graphify_*
 .codex/
+.playwright-cli/
 
 # OS/editor
 .DS_Store

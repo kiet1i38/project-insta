@@ -1,7 +1,21 @@
 import type { RequestHandler } from "express";
 import { loginSchema, registerSchema } from "./auth.schema.js";
-import { readRefreshTokenCookie, setRefreshTokenCookie } from "./refreshToken.js";
-import { loginUser, refreshUserSession, registerUser } from "./auth.service.js";
+import {
+  clearCsrfTokenCookie,
+  issueCsrfToken,
+  setCsrfTokenCookie
+} from "./csrfToken.js";
+import {
+  clearRefreshTokenCookie,
+  readRefreshTokenCookie,
+  setRefreshTokenCookie
+} from "./refreshToken.js";
+import {
+  loginUser,
+  logoutUserSession,
+  refreshUserSession,
+  registerUser
+} from "./auth.service.js";
 
 function toValidationDetails(issues: Array<{ message: string; path: PropertyKey[] }>) {
   return issues.map((issue) => ({
@@ -60,6 +74,11 @@ export const loginController: RequestHandler = async (req, res, next) => {
       result.refreshToken,
       result.refreshTokenExpiresAt
     );
+    setCsrfTokenCookie(
+      res,
+      issueCsrfToken(),
+      result.refreshTokenExpiresAt
+    );
 
     res.status(200).json({
       accessToken: result.accessToken,
@@ -81,12 +100,29 @@ export const refreshController: RequestHandler = async (req, res, next) => {
       result.refreshToken,
       result.refreshTokenExpiresAt
     );
+    setCsrfTokenCookie(
+      res,
+      issueCsrfToken(),
+      result.refreshTokenExpiresAt
+    );
 
     res.status(200).json({
       accessToken: result.accessToken,
       requestId: req.requestId,
       user: result.user
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const logoutController: RequestHandler = async (req, res, next) => {
+  try {
+    const refreshToken = readRefreshTokenCookie(req.headers.cookie);
+    await logoutUserSession(refreshToken);
+    clearCsrfTokenCookie(res);
+    clearRefreshTokenCookie(res);
+    res.status(204).send();
   } catch (error) {
     next(error);
   }
