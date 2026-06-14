@@ -20,7 +20,12 @@ const ownProfileSelect = {
     select: {
       followers: true,
       following: true,
-      posts: true
+      posts: {
+        where: {
+          deletedAt: null,
+          isHidden: false
+        }
+      }
     }
   }
 } satisfies Prisma.UserSelect;

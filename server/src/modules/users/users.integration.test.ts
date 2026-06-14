@@ -129,6 +129,46 @@ describe("users me profile API", () => {
     expect(response.body.profile.passwordHash).toBeUndefined();
   });
 
+  test("GET /api/v1/users/me counts only visible posts in the profile summary", async () => {
+    const owner = await createUserFixture({
+      email: "visible-post-count@example.com",
+      username: "visible_post_count"
+    });
+    const accessToken = await loginAndGetAccessToken(
+      owner.user.email,
+      owner.password
+    );
+
+    await prisma.post.createMany({
+      data: [
+        {
+          authorId: owner.user.id,
+          caption: "Visible post",
+          imageUrl: "https://cdn.example.com/posts/visible.png"
+        },
+        {
+          authorId: owner.user.id,
+          caption: "Hidden post",
+          imageUrl: "https://cdn.example.com/posts/hidden.png",
+          isHidden: true
+        },
+        {
+          authorId: owner.user.id,
+          caption: "Deleted post",
+          deletedAt: new Date("2026-06-14T05:00:00.000Z"),
+          imageUrl: "https://cdn.example.com/posts/deleted.png"
+        }
+      ]
+    });
+
+    const response = await request(app)
+      .get("/api/v1/users/me")
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.profile.counts.posts).toBe(1);
+  });
+
   test("GET /api/v1/users/me requires an authenticated access token", async () => {
     const response = await request(app).get("/api/v1/users/me");
 

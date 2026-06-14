@@ -1,7 +1,15 @@
 import type { RequestHandler } from "express";
 import { createUnauthorizedError } from "../auth/auth.errors.js";
-import { createPostBodySchema } from "./posts.schema.js";
-import { createPost } from "./posts.service.js";
+import {
+  createPostBodySchema,
+  getFeedQuerySchema
+} from "./posts.schema.js";
+import {
+  createPost,
+  deletePost,
+  getFeed,
+  getOwnVisiblePosts
+} from "./posts.service.js";
 
 function toValidationDetails(issues: Array<{ message: string; path: PropertyKey[] }>) {
   return issues.map((issue) => ({
@@ -55,6 +63,102 @@ export const createPostController: RequestHandler = async (req, res, next) => {
 
     res.status(201).json({
       post,
+      requestId: req.requestId
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getOwnPostsController: RequestHandler = async (req, res, next) => {
+  try {
+    if (!req.authUser) {
+      throw createUnauthorizedError();
+    }
+
+    const posts = await getOwnVisiblePosts(req.authUser.id);
+
+    res.status(200).json({
+      posts,
+      requestId: req.requestId
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getFeedController: RequestHandler = async (req, res, next) => {
+  const parsedQuery = getFeedQuerySchema.safeParse(req.query);
+
+  if (!parsedQuery.success) {
+    res.status(400).json({
+      error: {
+        code: "VALIDATION_ERROR",
+        details: toValidationDetails(parsedQuery.error.issues),
+        message: "Invalid query string."
+      },
+      requestId: req.requestId
+    });
+    return;
+  }
+
+  try {
+    if (!req.authUser) {
+      throw createUnauthorizedError();
+    }
+
+    const result = await getFeed({
+      cursor: parsedQuery.data.cursor,
+      limit: parsedQuery.data.limit,
+      viewerId: req.authUser.id
+    });
+
+    res.status(200).json({
+      pageInfo: result.pageInfo,
+      posts: result.posts,
+      requestId: req.requestId
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deletePostController: RequestHandler = async (req, res, next) => {
+  const rawPostId = req.params.postId;
+  const postId = Array.isArray(rawPostId) ? rawPostId[0] : rawPostId;
+
+  if (!postId) {
+    res.status(400).json({
+      error: {
+        code: "VALIDATION_ERROR",
+        details: [
+          {
+            message: "Post id is required.",
+            path: "postId"
+          }
+        ],
+        message: "Invalid route parameters."
+      },
+      requestId: req.requestId
+    });
+    return;
+  }
+
+  try {
+    if (!req.authUser) {
+      throw createUnauthorizedError();
+    }
+
+    const deletedPostId = await deletePost({
+      actor: {
+        id: req.authUser.id,
+        role: req.authUser.role
+      },
+      postId
+    });
+
+    res.status(200).json({
+      deletedPostId,
       requestId: req.requestId
     });
   } catch (error) {

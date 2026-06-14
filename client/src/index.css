@@ -411,17 +411,67 @@ a {
 }
 
 .profile-post-tile {
-  min-height: 168px;
-  padding: 1rem;
+  overflow: hidden;
   border-radius: 1.2rem;
+  background: linear-gradient(180deg, #f8fbff 0%, #e6eef9 100%);
+  border: 1px solid #dbe5f0;
+  display: grid;
+}
+
+.profile-post-media {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
   background:
     linear-gradient(145deg, rgba(15, 98, 254, 0.12), rgba(56, 189, 248, 0.32)),
     linear-gradient(180deg, #f8fbff 0%, #e6eef9 100%);
-  border: 1px solid #dbe5f0;
-  display: flex;
-  align-items: end;
+}
+
+.profile-post-content {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.9rem 1rem 1rem;
+}
+
+.profile-post-caption,
+.profile-post-meta {
+  margin: 0;
+}
+
+.profile-post-caption {
   color: #172033;
   font-weight: 700;
+}
+
+.profile-post-meta {
+  color: #4b5563;
+  font-size: 0.92rem;
+}
+
+.profile-post-delete-button {
+  min-height: 40px;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid #fecaca;
+  border-radius: 0.85rem;
+  background: #fff1f2;
+  color: #b91c1c;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.profile-post-delete-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.profile-post-delete-button:hover {
+  background: #ffe4e6;
+}
+
+.profile-post-delete-button:focus-visible {
+  outline: 2px solid #f87171;
+  outline-offset: 2px;
 }
 
 .profile-empty-state {

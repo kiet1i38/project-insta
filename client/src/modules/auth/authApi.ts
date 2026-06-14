@@ -59,6 +59,25 @@ export type OwnProfileResponse = {
   requestId: string;
 };
 
+export type OwnPost = {
+  authorId: string;
+  caption: string | null;
+  createdAt: string;
+  id: string;
+  imageUrl: string;
+  updatedAt: string;
+};
+
+export type OwnPostsResponse = {
+  posts: OwnPost[];
+  requestId: string;
+};
+
+export type DeleteOwnPostResponse = {
+  deletedPostId: string;
+  requestId: string;
+};
+
 export type SearchUser = {
   avatarUrl: string | null;
   bio: string | null;
@@ -170,7 +189,7 @@ async function requestJson<T>(
     body?: unknown;
     includeAccessToken?: boolean;
     includeCsrf?: boolean;
-    method?: "GET" | "PATCH" | "POST";
+    method?: "DELETE" | "GET" | "PATCH" | "POST";
   } = {}
 ): Promise<T> {
   const headers = new Headers();
@@ -303,6 +322,25 @@ export async function updateOwnProfile(
     includeAccessToken: true,
     method: "PATCH"
   });
+}
+
+export async function getOwnPosts(): Promise<OwnPostsResponse> {
+  return requestJson<OwnPostsResponse>("/posts/me", {
+    includeAccessToken: true,
+    method: "GET"
+  });
+}
+
+export async function deleteOwnPost(
+  postId: string
+): Promise<DeleteOwnPostResponse> {
+  return requestJson<DeleteOwnPostResponse>(
+    `/posts/${encodeURIComponent(postId)}`,
+    {
+      includeAccessToken: true,
+      method: "DELETE"
+    }
+  );
 }
 
 export async function searchUsers(

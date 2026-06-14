@@ -9,7 +9,9 @@ import { readCsrfTokenCookie } from "./csrfToken.js";
 const authCorsAllowHeaders = ["Content-Type", "Authorization", "X-CSRF-Token"].join(
   ", "
 );
-const authCorsAllowMethods = ["GET", "PATCH", "POST", "OPTIONS"].join(", ");
+const authCorsAllowMethods = ["DELETE", "GET", "PATCH", "POST", "OPTIONS"].join(
+  ", "
+);
 
 function getRequestOrigin(headers: {
   origin?: string | string[];

@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   ApiError,
+  deleteOwnPost,
+  getOwnPosts,
   getOwnProfile,
+  type OwnPost,
   type OwnProfile
 } from "../modules/auth/authApi";
 
@@ -24,6 +27,14 @@ function getAvatarLabel(profile: OwnProfile | null): string {
     .join("");
 }
 
+function formatPostDate(isoTimestamp: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  }).format(new Date(isoTimestamp));
+}
+
 export function ProfilePage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -31,9 +42,16 @@ export function ProfilePage() {
   const [profile, setProfile] = useState<OwnProfile | null>(
     locationState?.profile ?? null
   );
-  const [isLoading, setIsLoading] = useState(locationState?.profile === undefined);
+  const [posts, setPosts] = useState<OwnPost[]>([]);
+  const [isProfileLoading, setIsProfileLoading] = useState(
+    locationState?.profile === undefined
+  );
+  const [isPostsLoading, setIsPostsLoading] = useState(true);
+  const [isDeletingPostId, setIsDeletingPostId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [notice] = useState<string | null>(locationState?.notice ?? null);
+  const [notice, setNotice] = useState<string | null>(
+    locationState?.notice ?? null
+  );
 
   useEffect(() => {
     if (locationState) {
@@ -42,15 +60,15 @@ export function ProfilePage() {
   }, [location.pathname, locationState, navigate]);
 
   useEffect(() => {
-    if (profile) {
-      setIsLoading(false);
+    if (locationState?.profile) {
+      setIsProfileLoading(false);
       return;
     }
 
     let isActive = true;
 
     async function loadProfile() {
-      setIsLoading(true);
+      setIsProfileLoading(true);
       setErrorMessage(null);
 
       try {
@@ -73,7 +91,7 @@ export function ProfilePage() {
         );
       } finally {
         if (isActive) {
-          setIsLoading(false);
+          setIsProfileLoading(false);
         }
       }
     }
@@ -83,20 +101,94 @@ export function ProfilePage() {
     return () => {
       isActive = false;
     };
-  }, [profile]);
+  }, [locationState?.profile]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadPosts() {
+      setIsPostsLoading(true);
+      setErrorMessage(null);
+
+      try {
+        const response = await getOwnPosts();
+
+        if (!isActive) {
+          return;
+        }
+
+        setPosts(response.posts);
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setErrorMessage(
+          error instanceof ApiError
+            ? error.message
+            : "Could not load profile posts right now. Please try again."
+        );
+      } finally {
+        if (isActive) {
+          setIsPostsLoading(false);
+        }
+      }
+    }
+
+    void loadPosts();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  async function handleDeletePost(post: OwnPost): Promise<void> {
+    setErrorMessage(null);
+    setNotice(null);
+    setIsDeletingPostId(post.id);
+
+    try {
+      await deleteOwnPost(post.id);
+      setPosts((currentPosts) =>
+        currentPosts.filter((currentPost) => currentPost.id !== post.id)
+      );
+      setProfile((currentProfile) => {
+        if (!currentProfile) {
+          return currentProfile;
+        }
+
+        return {
+          ...currentProfile,
+          counts: {
+            ...currentProfile.counts,
+            posts: Math.max(currentProfile.counts.posts - 1, 0)
+          }
+        };
+      });
+      setNotice("Post deleted.");
+    } catch (error) {
+      setErrorMessage(
+        error instanceof ApiError
+          ? error.message
+          : "Could not delete the post right now. Please try again."
+      );
+    } finally {
+      setIsDeletingPostId(null);
+    }
+  }
 
   const avatarLabel = getAvatarLabel(profile);
-  const previewTileCount =
-    profile?.counts.posts && profile.counts.posts > 0
-      ? Math.min(profile.counts.posts, 6)
-      : 0;
+  const isLoading = isProfileLoading || isPostsLoading;
 
   if (isLoading) {
     return (
       <section className="panel profile-page">
-        <p className="eyebrow">Slice 5B</p>
+        <p className="eyebrow">Slice 6C</p>
         <h2>Your profile</h2>
-        <p>Loading the protected profile view from the real `/users/me` endpoint.</p>
+        <p>
+          Loading the protected profile view and real post grid from the
+          backend.
+        </p>
       </section>
     );
   }
@@ -104,7 +196,7 @@ export function ProfilePage() {
   if (!profile) {
     return (
       <section className="panel profile-page">
-        <p className="eyebrow">Slice 5B</p>
+        <p className="eyebrow">Slice 6C</p>
         <h2>Your profile</h2>
         <p className="form-status" data-tone="error" role="status">
           {errorMessage ?? "Could not load the profile right now."}
@@ -128,7 +220,7 @@ export function ProfilePage() {
               {avatarLabel}
             </div>
           )}
-          <p className="eyebrow">Slice 5B</p>
+          <p className="eyebrow">Slice 6C</p>
         </div>
 
         <div className="profile-copy">
@@ -199,12 +291,12 @@ export function ProfilePage() {
         <div className="profile-section-heading">
           <h3>Posts</h3>
           <p>
-            This screen already uses the real post count. Visual media cards can
-            be swapped to real post data as the posts/feed slices arrive.
+            Real profile cards now come from the backend post module, and each
+            card can soft-delete through the matching owner/admin endpoint.
           </p>
         </div>
 
-        {previewTileCount === 0 ? (
+        {posts.length === 0 ? (
           <div className="profile-empty-state">
             <h4>No posts yet. Create your first post in the upcoming post slice.</h4>
             <p>
@@ -215,9 +307,30 @@ export function ProfilePage() {
           </div>
         ) : (
           <div className="profile-post-grid">
-            {Array.from({ length: previewTileCount }, (_, index) => (
-              <article className="profile-post-tile" key={`profile-post-${index + 1}`}>
-                <span>{`Post ${index + 1}`}</span>
+            {posts.map((post) => (
+              <article className="profile-post-tile" key={post.id}>
+                <img
+                  alt={post.caption ? `Post image for ${post.caption}` : "Profile post image"}
+                  className="profile-post-media"
+                  src={post.imageUrl}
+                />
+                <div className="profile-post-content">
+                  <p className="profile-post-caption">
+                    {post.caption ?? "Untitled post"}
+                  </p>
+                  <p className="profile-post-meta">
+                    Posted {formatPostDate(post.createdAt)}
+                  </p>
+                  <button
+                    aria-label={`Delete ${post.caption ?? "untitled post"}`}
+                    className="profile-post-delete-button"
+                    disabled={isDeletingPostId === post.id}
+                    onClick={() => void handleDeletePost(post)}
+                    type="button"
+                  >
+                    {isDeletingPostId === post.id ? "Deleting..." : "Delete post"}
+                  </button>
+                </div>
               </article>
             ))}
           </div>

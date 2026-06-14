@@ -39,6 +39,34 @@ const updatedProfile = {
   displayName: "Updated Student Demo"
 };
 
+const profileWithPosts = {
+  ...initialProfile,
+  counts: {
+    followers: 12,
+    following: 7,
+    posts: 2
+  }
+};
+
+const initialPosts = [
+  {
+    authorId: demoUser.id,
+    caption: "Newest workshop upload",
+    createdAt: "2026-06-13T10:00:00.000Z",
+    id: "post-2",
+    imageUrl: "https://cdn.example.com/posts/newest.png",
+    updatedAt: "2026-06-13T10:00:00.000Z"
+  },
+  {
+    authorId: demoUser.id,
+    caption: "Older study snapshot",
+    createdAt: "2026-06-12T09:00:00.000Z",
+    id: "post-1",
+    imageUrl: "https://cdn.example.com/posts/older.png",
+    updatedAt: "2026-06-12T09:00:00.000Z"
+  }
+] as const;
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     headers: {
@@ -74,6 +102,16 @@ describe("Profile UI", () => {
           return jsonResponse({
             profile: initialProfile,
             requestId: "req-profile-get"
+          });
+        }
+
+        if (
+          input === "http://localhost:3001/api/v1/posts/me" &&
+          init?.method === "GET"
+        ) {
+          return jsonResponse({
+            posts: [],
+            requestId: "req-profile-posts"
           });
         }
 
@@ -124,6 +162,16 @@ describe("Profile UI", () => {
     expect(profileHeaders.get("Authorization")).toBe(
       "Bearer profile-access-token"
     );
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "http://localhost:3001/api/v1/posts/me",
+        expect.objectContaining({
+          credentials: "include",
+          method: "GET"
+        })
+      );
+    });
   });
 
   it("lets the user open /profile/edit, save updates, and return to the refreshed profile view", async () => {
@@ -233,5 +281,89 @@ describe("Profile UI", () => {
       bio: "Updated bio for the profile-edit slice.",
       displayName: "Updated Student Demo"
     });
+  });
+
+  it("renders real profile posts and lets the owner delete a post from the grid", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(
+      async (input, init) => {
+        if (input === "http://localhost:3001/api/v1/auth/refresh") {
+          return jsonResponse({
+            accessToken: "profile-access-token",
+            requestId: "req-profile-refresh",
+            user: demoUser
+          });
+        }
+
+        if (
+          input === "http://localhost:3001/api/v1/users/me" &&
+          init?.method === "GET"
+        ) {
+          return jsonResponse({
+            profile: profileWithPosts,
+            requestId: "req-profile-get-with-posts"
+          });
+        }
+
+        if (
+          input === "http://localhost:3001/api/v1/posts/me" &&
+          init?.method === "GET"
+        ) {
+          return jsonResponse({
+            posts: initialPosts,
+            requestId: "req-profile-posts"
+          });
+        }
+
+        if (
+          input === "http://localhost:3001/api/v1/posts/post-2" &&
+          init?.method === "DELETE"
+        ) {
+          return jsonResponse({
+            deletedPostId: "post-2",
+            requestId: "req-delete-post"
+          });
+        }
+
+        throw new Error(`Unexpected fetch request: ${String(input)}`);
+      }
+    );
+
+    document.cookie = "cloneinsta_csrf=csrf-profile; path=/";
+    window.history.pushState({}, "", "/profile");
+
+    render(<App />);
+
+    expect(
+      await screen.findByText(/newest workshop upload/i)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/older study snapshot/i)).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /delete newest workshop upload/i })
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText(/newest workshop upload/i)).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/post deleted\./i)).toBeInTheDocument();
+    expect(screen.getByText(/older study snapshot/i)).toBeInTheDocument();
+
+    const deleteCall = fetchSpy.mock.calls.find(
+      ([requestInput, requestInit]) =>
+        requestInput === "http://localhost:3001/api/v1/posts/post-2" &&
+        requestInit?.method === "DELETE"
+    );
+
+    expect(deleteCall).toBeDefined();
+
+    const deleteInit = deleteCall?.[1];
+    const deleteHeaders = deleteInit?.headers as Headers;
+
+    expect(deleteHeaders).toBeInstanceOf(Headers);
+    expect(deleteHeaders.get("Authorization")).toBe(
+      "Bearer profile-access-token"
+    );
   });
 });
