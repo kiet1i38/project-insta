@@ -385,6 +385,151 @@ describe("posts API", () => {
     ]);
   });
 
+  test("POST /api/v1/posts/:postId/likes creates one like row even when duplicate requests race", async () => {
+    const author = await createUserFixture({
+      email: "like-author@example.com",
+      username: "like_author"
+    });
+    const liker = await createUserFixture({
+      email: "like-viewer@example.com",
+      username: "like_viewer"
+    });
+    const accessToken = await loginAndGetAccessToken(
+      liker.user.email,
+      liker.password
+    );
+    const postId = await createPostFixture({
+      authorId: author.user.id,
+      caption: "Likeable post",
+      imageUrl: "https://cdn.example.com/posts/likeable.png"
+    });
+
+    const [firstResponse, secondResponse] = await Promise.all([
+      request(app)
+        .post(`/api/v1/posts/${postId}/likes`)
+        .set("Origin", allowedOrigin)
+        .set("Authorization", `Bearer ${accessToken}`),
+      request(app)
+        .post(`/api/v1/posts/${postId}/likes`)
+        .set("Origin", allowedOrigin)
+        .set("Authorization", `Bearer ${accessToken}`)
+    ]);
+
+    for (const response of [firstResponse, secondResponse]) {
+      expect(response.status).toBe(200);
+      expect(response.headers["access-control-allow-origin"]).toBe(allowedOrigin);
+      expect(response.body).toEqual({
+        postId,
+        requestId: expect.stringMatching(/^req_/),
+        viewerHasLiked: true
+      });
+    }
+
+    const likeCount = await prisma.like.count({
+      where: {
+        postId,
+        userId: liker.user.id
+      }
+    });
+
+    expect(likeCount).toBe(1);
+  });
+
+  test("DELETE /api/v1/posts/:postId/likes removes only the authenticated user's like", async () => {
+    const author = await createUserFixture({
+      email: "unlike-author@example.com",
+      username: "unlike_author"
+    });
+    const liker = await createUserFixture({
+      email: "unlike-viewer@example.com",
+      username: "unlike_viewer"
+    });
+    const otherLiker = await createUserFixture({
+      email: "unlike-other@example.com",
+      username: "unlike_other"
+    });
+    const accessToken = await loginAndGetAccessToken(
+      liker.user.email,
+      liker.password
+    );
+    const postId = await createPostFixture({
+      authorId: author.user.id,
+      caption: "Unlike me",
+      imageUrl: "https://cdn.example.com/posts/unlike-me.png"
+    });
+
+    await prisma.like.createMany({
+      data: [
+        {
+          postId,
+          userId: liker.user.id
+        },
+        {
+          postId,
+          userId: otherLiker.user.id
+        }
+      ]
+    });
+
+    const response = await request(app)
+      .delete(`/api/v1/posts/${postId}/likes`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      postId,
+      requestId: expect.stringMatching(/^req_/),
+      viewerHasLiked: false
+    });
+
+    const remainingLikes = await prisma.like.findMany({
+      where: { postId }
+    });
+
+    expect(remainingLikes).toHaveLength(1);
+    expect(remainingLikes[0]).toMatchObject({
+      postId,
+      userId: otherLiker.user.id
+    });
+  });
+
+  test("POST /api/v1/posts/:postId/likes rejects a deleted post", async () => {
+    const author = await createUserFixture({
+      email: "deleted-like-author@example.com",
+      username: "deleted_like_author"
+    });
+    const liker = await createUserFixture({
+      email: "deleted-like-viewer@example.com",
+      username: "deleted_like_viewer"
+    });
+    const accessToken = await loginAndGetAccessToken(
+      liker.user.email,
+      liker.password
+    );
+    const deletedPostId = await createPostFixture({
+      authorId: author.user.id,
+      caption: "Already deleted",
+      deletedAt: new Date("2026-06-14T07:00:00.000Z"),
+      imageUrl: "https://cdn.example.com/posts/already-deleted.png"
+    });
+
+    const response = await request(app)
+      .post(`/api/v1/posts/${deletedPostId}/likes`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(response.status).toBe(404);
+    expect(response.body.error.code).toBe("POST_NOT_FOUND");
+    expect(response.body.error.message).toBe("Post not found.");
+    expect(
+      await prisma.like.count({
+        where: {
+          postId: deletedPostId,
+          userId: liker.user.id
+        }
+      })
+    ).toBe(0);
+  });
+
   test("GET /api/v1/posts/me returns the authenticated user's visible posts in newest-first order", async () => {
     const owner = await createUserFixture({
       email: "profile-grid-owner@example.com",
@@ -738,6 +883,23 @@ describe("posts API", () => {
     expect(response.status).toBe(204);
     expect(response.headers["access-control-allow-origin"]).toBe(allowedOrigin);
     expect(response.headers["access-control-allow-credentials"]).toBe("true");
+    expect(response.headers["access-control-allow-methods"]).toContain("DELETE");
+    expect(response.headers["access-control-allow-headers"]).toContain(
+      "Authorization"
+    );
+  });
+
+  test("OPTIONS /api/v1/posts/:postId/likes returns CORS headers for the allowed client origin before a browser POST request", async () => {
+    const response = await request(app)
+      .options("/api/v1/posts/test-post-id/likes")
+      .set("Origin", allowedOrigin)
+      .set("Access-Control-Request-Method", "POST")
+      .set("Access-Control-Request-Headers", "authorization");
+
+    expect(response.status).toBe(204);
+    expect(response.headers["access-control-allow-origin"]).toBe(allowedOrigin);
+    expect(response.headers["access-control-allow-credentials"]).toBe("true");
+    expect(response.headers["access-control-allow-methods"]).toContain("POST");
     expect(response.headers["access-control-allow-methods"]).toContain("DELETE");
     expect(response.headers["access-control-allow-headers"]).toContain(
       "Authorization"

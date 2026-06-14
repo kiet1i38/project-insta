@@ -2,13 +2,16 @@ import type { RequestHandler } from "express";
 import { createUnauthorizedError } from "../auth/auth.errors.js";
 import {
   createPostBodySchema,
-  getFeedQuerySchema
+  getFeedQuerySchema,
+  postRouteParamsSchema
 } from "./posts.schema.js";
 import {
   createPost,
   deletePost,
   getFeed,
-  getOwnVisiblePosts
+  getOwnVisiblePosts,
+  likePost,
+  unlikePost
 } from "./posts.service.js";
 
 function toValidationDetails(issues: Array<{ message: string; path: PropertyKey[] }>) {
@@ -123,20 +126,88 @@ export const getFeedController: RequestHandler = async (req, res, next) => {
   }
 };
 
-export const deletePostController: RequestHandler = async (req, res, next) => {
-  const rawPostId = req.params.postId;
+function parsePostRouteParams(rawPostId: string | string[] | undefined) {
   const postId = Array.isArray(rawPostId) ? rawPostId[0] : rawPostId;
 
-  if (!postId) {
+  return postRouteParamsSchema.safeParse({ postId });
+}
+
+export const likePostController: RequestHandler = async (req, res, next) => {
+  const parsedParams = parsePostRouteParams(req.params.postId);
+
+  if (!parsedParams.success) {
     res.status(400).json({
       error: {
         code: "VALIDATION_ERROR",
-        details: [
-          {
-            message: "Post id is required.",
-            path: "postId"
-          }
-        ],
+        details: toValidationDetails(parsedParams.error.issues),
+        message: "Invalid route parameters."
+      },
+      requestId: req.requestId
+    });
+    return;
+  }
+
+  try {
+    if (!req.authUser) {
+      throw createUnauthorizedError();
+    }
+
+    const result = await likePost({
+      actorId: req.authUser.id,
+      postId: parsedParams.data.postId
+    });
+
+    res.status(200).json({
+      ...result,
+      requestId: req.requestId
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const unlikePostController: RequestHandler = async (req, res, next) => {
+  const parsedParams = parsePostRouteParams(req.params.postId);
+
+  if (!parsedParams.success) {
+    res.status(400).json({
+      error: {
+        code: "VALIDATION_ERROR",
+        details: toValidationDetails(parsedParams.error.issues),
+        message: "Invalid route parameters."
+      },
+      requestId: req.requestId
+    });
+    return;
+  }
+
+  try {
+    if (!req.authUser) {
+      throw createUnauthorizedError();
+    }
+
+    const result = await unlikePost({
+      actorId: req.authUser.id,
+      postId: parsedParams.data.postId
+    });
+
+    res.status(200).json({
+      ...result,
+      requestId: req.requestId
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deletePostController: RequestHandler = async (req, res, next) => {
+  const parsedParams = parsePostRouteParams(req.params.postId);
+
+  if (!parsedParams.success) {
+    res.status(400).json({
+      error: {
+        code: "VALIDATION_ERROR",
+        details: toValidationDetails(parsedParams.error.issues),
         message: "Invalid route parameters."
       },
       requestId: req.requestId
@@ -154,7 +225,7 @@ export const deletePostController: RequestHandler = async (req, res, next) => {
         id: req.authUser.id,
         role: req.authUser.role
       },
-      postId
+      postId: parsedParams.data.postId
     });
 
     res.status(200).json({

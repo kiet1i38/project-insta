@@ -9,7 +9,9 @@ import {
   createPostController,
   deletePostController,
   getFeedController,
-  getOwnPostsController
+  getOwnPostsController,
+  likePostController,
+  unlikePostController
 } from "./posts.controller.js";
 
 const postsRouter = Router();
@@ -20,10 +22,13 @@ const uploadPostImage = multer({
 postsRouter.use(applyAuthCors);
 postsRouter.options("/feed", handleAuthCorsPreflight);
 postsRouter.options("/me", handleAuthCorsPreflight);
+postsRouter.options("/:postId/likes", handleAuthCorsPreflight);
 postsRouter.options("/", handleAuthCorsPreflight);
 postsRouter.options("/:postId", handleAuthCorsPreflight);
 postsRouter.get("/feed", requireAuth, getFeedController);
 postsRouter.get("/me", requireAuth, getOwnPostsController);
+postsRouter.post("/:postId/likes", requireAuth, likePostController);
+postsRouter.delete("/:postId/likes", requireAuth, unlikePostController);
 postsRouter.delete("/:postId", requireAuth, deletePostController);
 postsRouter.post(
   "/",

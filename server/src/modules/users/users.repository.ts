@@ -46,6 +46,14 @@ export type SearchUserRecord = Prisma.UserGetPayload<{
   select: typeof searchUserSelect;
 }>;
 
+const activeUserIdentitySelect = {
+  id: true
+} satisfies Prisma.UserSelect;
+
+export type ActiveUserIdentityRecord = Prisma.UserGetPayload<{
+  select: typeof activeUserIdentitySelect;
+}>;
+
 export async function findOwnProfileById(
   userId: string
 ): Promise<OwnProfileRecord | null> {
@@ -73,6 +81,40 @@ export async function updateOwnProfileById(
       select: ownProfileSelect,
       where: { id: userId }
     });
+  });
+}
+
+export async function findActiveUserById(
+  userId: string
+): Promise<ActiveUserIdentityRecord | null> {
+  return prisma.user.findFirst({
+    select: activeUserIdentitySelect,
+    where: {
+      id: userId,
+      status: "ACTIVE"
+    }
+  });
+}
+
+export async function createFollowRelationship(input: {
+  followerId: string;
+  followingId: string;
+}) {
+  await prisma.follow.createMany({
+    data: [input],
+    skipDuplicates: true
+  });
+}
+
+export async function deleteFollowRelationship(input: {
+  followerId: string;
+  followingId: string;
+}) {
+  await prisma.follow.deleteMany({
+    where: {
+      followerId: input.followerId,
+      followingId: input.followingId
+    }
   });
 }
 

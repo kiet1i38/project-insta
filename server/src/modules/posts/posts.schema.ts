@@ -21,6 +21,12 @@ export const createPostBodySchema = z
   })
   .strict();
 
+export const postRouteParamsSchema = z
+  .object({
+    postId: z.string().uuid("Post id must be a valid UUID.")
+  })
+  .strict();
+
 const feedCursorSchema = z.object({
   createdAt: z
     .string()
@@ -67,3 +73,4 @@ export const getFeedQuerySchema = z
 export type CreatePostBodyInput = z.infer<typeof createPostBodySchema>;
 export type FeedCursor = z.infer<typeof feedCursorSchema>;
 export type GetFeedQueryInput = z.infer<typeof getFeedQuerySchema>;
+export type PostRouteParamsInput = z.infer<typeof postRouteParamsSchema>;

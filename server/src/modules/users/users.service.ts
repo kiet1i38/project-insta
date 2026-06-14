@@ -4,6 +4,9 @@ import type {
   UpdateOwnProfileInput
 } from "./users.schema.js";
 import {
+  createFollowRelationship,
+  deleteFollowRelationship,
+  findActiveUserById,
   findOwnProfileById,
   findUsersForSearch,
   type OwnProfileRecord,
@@ -47,8 +50,21 @@ type SearchUsersDto = {
   users: SearchUserDto[];
 };
 
+type FollowStateDto = {
+  targetUserId: string;
+  viewerIsFollowing: boolean;
+};
+
 function createUserNotFoundError(): AppError {
   return new AppError(404, "USER_NOT_FOUND", "User not found.");
+}
+
+function createSelfFollowError(): AppError {
+  return new AppError(
+    400,
+    "FOLLOW_SELF_NOT_ALLOWED",
+    "Users cannot follow themselves."
+  );
 }
 
 function toOwnProfileDto(profile: OwnProfileRecord): OwnProfileDto {
@@ -112,6 +128,56 @@ export async function updateOwnProfile(
   }
 
   return toOwnProfileDto(updatedProfile);
+}
+
+export async function followUser(input: {
+  targetUserId: string;
+  viewerId: string;
+}): Promise<FollowStateDto> {
+  if (input.viewerId === input.targetUserId) {
+    throw createSelfFollowError();
+  }
+
+  const targetUser = await findActiveUserById(input.targetUserId);
+
+  if (!targetUser) {
+    throw createUserNotFoundError();
+  }
+
+  await createFollowRelationship({
+    followerId: input.viewerId,
+    followingId: input.targetUserId
+  });
+
+  return {
+    targetUserId: input.targetUserId,
+    viewerIsFollowing: true
+  };
+}
+
+export async function unfollowUser(input: {
+  targetUserId: string;
+  viewerId: string;
+}): Promise<FollowStateDto> {
+  if (input.viewerId === input.targetUserId) {
+    throw createSelfFollowError();
+  }
+
+  const targetUser = await findActiveUserById(input.targetUserId);
+
+  if (!targetUser) {
+    throw createUserNotFoundError();
+  }
+
+  await deleteFollowRelationship({
+    followerId: input.viewerId,
+    followingId: input.targetUserId
+  });
+
+  return {
+    targetUserId: input.targetUserId,
+    viewerIsFollowing: false
+  };
 }
 
 export async function searchUsers(

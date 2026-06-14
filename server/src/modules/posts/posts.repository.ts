@@ -120,6 +120,22 @@ export async function findActivePostById(postId: string) {
   });
 }
 
+export async function createPostLike(input: { postId: string; userId: string }) {
+  await prisma.like.createMany({
+    data: [input],
+    skipDuplicates: true
+  });
+}
+
+export async function deletePostLike(input: { postId: string; userId: string }) {
+  await prisma.like.deleteMany({
+    where: {
+      postId: input.postId,
+      userId: input.userId
+    }
+  });
+}
+
 export async function softDeletePostById(postId: string, deletedAt: Date) {
   return prisma.$transaction(async (tx) => {
     const updateResult = await tx.post.updateMany({

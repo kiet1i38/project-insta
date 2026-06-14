@@ -39,6 +39,12 @@ const nullableAvatarUrlSchema = z.preprocess(
   ])
 );
 
+export const userRouteParamsSchema = z
+  .object({
+    userId: z.string().uuid("User id must be a valid UUID.")
+  })
+  .strict();
+
 export const updateOwnProfileSchema = z
   .object({
     avatarUrl: nullableAvatarUrlSchema.optional(),
@@ -91,3 +97,4 @@ export const searchUsersQuerySchema = z
 export type UpdateOwnProfileInput = z.infer<typeof updateOwnProfileSchema>;
 export type SearchUsersCursor = z.infer<typeof searchUsersCursorSchema>;
 export type SearchUsersQueryInput = z.infer<typeof searchUsersQuerySchema>;
+export type UserRouteParamsInput = z.infer<typeof userRouteParamsSchema>;

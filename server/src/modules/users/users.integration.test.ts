@@ -331,6 +331,189 @@ describe("users me profile API", () => {
     expect(response.body.error.message).toBe("Authentication required.");
   });
 
+  test("POST /api/v1/users/:userId/follow creates one follow row even when duplicate requests race and the viewer counts update", async () => {
+    const viewer = await createUserFixture({
+      email: "follow-viewer@example.com",
+      username: "follow_viewer"
+    });
+    const target = await createUserFixture({
+      email: "follow-target@example.com",
+      username: "follow_target"
+    });
+    const accessToken = await loginAndGetAccessToken(
+      viewer.user.email,
+      viewer.password
+    );
+
+    const [firstResponse, secondResponse] = await Promise.all([
+      request(app)
+        .post(`/api/v1/users/${target.user.id}/follow`)
+        .set("Origin", allowedOrigin)
+        .set("Authorization", `Bearer ${accessToken}`),
+      request(app)
+        .post(`/api/v1/users/${target.user.id}/follow`)
+        .set("Origin", allowedOrigin)
+        .set("Authorization", `Bearer ${accessToken}`)
+    ]);
+
+    for (const response of [firstResponse, secondResponse]) {
+      expect(response.status).toBe(200);
+      expect(response.headers["access-control-allow-origin"]).toBe(allowedOrigin);
+      expect(response.body).toEqual({
+        requestId: expect.stringMatching(/^req_/),
+        targetUserId: target.user.id,
+        viewerIsFollowing: true
+      });
+    }
+
+    expect(
+      await prisma.follow.count({
+        where: {
+          followerId: viewer.user.id,
+          followingId: target.user.id
+        }
+      })
+    ).toBe(1);
+
+    const ownProfileResponse = await request(app)
+      .get("/api/v1/users/me")
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(ownProfileResponse.status).toBe(200);
+    expect(ownProfileResponse.body.profile.counts).toMatchObject({
+      followers: 0,
+      following: 1,
+      posts: 0
+    });
+    expect(
+      await prisma.follow.count({
+        where: {
+          followingId: target.user.id
+        }
+      })
+    ).toBe(1);
+  });
+
+  test("POST /api/v1/users/:userId/follow rejects self-follow", async () => {
+    const viewer = await createUserFixture({
+      email: "self-follow@example.com",
+      username: "self_follow"
+    });
+    const accessToken = await loginAndGetAccessToken(
+      viewer.user.email,
+      viewer.password
+    );
+
+    const response = await request(app)
+      .post(`/api/v1/users/${viewer.user.id}/follow`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe("FOLLOW_SELF_NOT_ALLOWED");
+    expect(response.body.error.message).toBe("Users cannot follow themselves.");
+    expect(
+      await prisma.follow.count({
+        where: {
+          followerId: viewer.user.id
+        }
+      })
+    ).toBe(0);
+  });
+
+  test("DELETE /api/v1/users/:userId/follow removes only the authenticated user's follow relation", async () => {
+    const viewer = await createUserFixture({
+      email: "unfollow-viewer@example.com",
+      username: "unfollow_viewer"
+    });
+    const otherFollower = await createUserFixture({
+      email: "unfollow-other@example.com",
+      username: "unfollow_other"
+    });
+    const target = await createUserFixture({
+      email: "unfollow-target@example.com",
+      username: "unfollow_target"
+    });
+    const accessToken = await loginAndGetAccessToken(
+      viewer.user.email,
+      viewer.password
+    );
+
+    await prisma.follow.createMany({
+      data: [
+        {
+          followerId: viewer.user.id,
+          followingId: target.user.id
+        },
+        {
+          followerId: otherFollower.user.id,
+          followingId: target.user.id
+        }
+      ]
+    });
+
+    const response = await request(app)
+      .delete(`/api/v1/users/${target.user.id}/follow`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      requestId: expect.stringMatching(/^req_/),
+      targetUserId: target.user.id,
+      viewerIsFollowing: false
+    });
+
+    const remainingFollows = await prisma.follow.findMany({
+      where: {
+        followingId: target.user.id
+      }
+    });
+
+    expect(remainingFollows).toHaveLength(1);
+    expect(remainingFollows[0]).toMatchObject({
+      followerId: otherFollower.user.id,
+      followingId: target.user.id
+    });
+
+    const ownProfileResponse = await request(app)
+      .get("/api/v1/users/me")
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(ownProfileResponse.status).toBe(200);
+    expect(ownProfileResponse.body.profile.counts.following).toBe(0);
+  });
+
+  test("POST /api/v1/users/:userId/follow hides banned targets behind USER_NOT_FOUND", async () => {
+    const viewer = await createUserFixture({
+      email: "follow-banned-viewer@example.com",
+      username: "follow_banned_viewer"
+    });
+    const bannedTarget = await createUserFixture({
+      email: "follow-banned-target@example.com",
+      status: "BANNED",
+      username: "follow_banned_target"
+    });
+    const accessToken = await loginAndGetAccessToken(
+      viewer.user.email,
+      viewer.password
+    );
+
+    const response = await request(app)
+      .post(`/api/v1/users/${bannedTarget.user.id}/follow`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(response.status).toBe(404);
+    expect(response.body.error.code).toBe("USER_NOT_FOUND");
+    expect(response.body.error.message).toBe("User not found.");
+    expect(
+      await prisma.follow.count({
+        where: {
+          followerId: viewer.user.id,
+          followingId: bannedTarget.user.id
+        }
+      })
+    ).toBe(0);
+  });
+
   test("GET /api/v1/users/search returns a safe paginated search result for active users only", async () => {
     const requester = await createUserFixture({
       displayName: "Requester User",
@@ -493,6 +676,23 @@ describe("users me profile API", () => {
     expect(response.headers["access-control-allow-origin"]).toBe(allowedOrigin);
     expect(response.headers["access-control-allow-credentials"]).toBe("true");
     expect(response.headers["access-control-allow-methods"]).toContain("GET");
+    expect(response.headers["access-control-allow-headers"]).toContain(
+      "Authorization"
+    );
+  });
+
+  test("OPTIONS /api/v1/users/:userId/follow returns CORS headers for the allowed client origin before a browser POST request", async () => {
+    const response = await request(app)
+      .options("/api/v1/users/test-user-id/follow")
+      .set("Origin", allowedOrigin)
+      .set("Access-Control-Request-Method", "POST")
+      .set("Access-Control-Request-Headers", "authorization");
+
+    expect(response.status).toBe(204);
+    expect(response.headers["access-control-allow-origin"]).toBe(allowedOrigin);
+    expect(response.headers["access-control-allow-credentials"]).toBe("true");
+    expect(response.headers["access-control-allow-methods"]).toContain("POST");
+    expect(response.headers["access-control-allow-methods"]).toContain("DELETE");
     expect(response.headers["access-control-allow-headers"]).toContain(
       "Authorization"
     );

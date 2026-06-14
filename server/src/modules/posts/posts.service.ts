@@ -3,7 +3,9 @@ import { join } from "node:path";
 import { AppError } from "../../lib/appError.js";
 import { createForbiddenError } from "../auth/auth.errors.js";
 import {
+  createPostLike,
   createPostRecord,
+  deletePostLike,
   findFeedPostsForViewer,
   findActivePostById,
   findVisiblePostsByAuthorId,
@@ -61,6 +63,11 @@ type FeedPostsDto = {
     nextCursor: string | null;
   };
   posts: FeedPostDto[];
+};
+
+type PostLikeStateDto = {
+  postId: string;
+  viewerHasLiked: boolean;
 };
 
 type PostDto = {
@@ -166,6 +173,48 @@ export async function getFeed(input: GetFeedInput): Promise<FeedPostsDto> {
         hasNextPage && lastVisiblePost ? encodeFeedCursor(lastVisiblePost) : null
     },
     posts: visiblePosts.map(toFeedPostDto)
+  };
+}
+
+export async function likePost(input: {
+  actorId: string;
+  postId: string;
+}): Promise<PostLikeStateDto> {
+  const existingPost = await findActivePostById(input.postId);
+
+  if (!existingPost) {
+    throw createPostNotFoundError();
+  }
+
+  await createPostLike({
+    postId: input.postId,
+    userId: input.actorId
+  });
+
+  return {
+    postId: input.postId,
+    viewerHasLiked: true
+  };
+}
+
+export async function unlikePost(input: {
+  actorId: string;
+  postId: string;
+}): Promise<PostLikeStateDto> {
+  const existingPost = await findActivePostById(input.postId);
+
+  if (!existingPost) {
+    throw createPostNotFoundError();
+  }
+
+  await deletePostLike({
+    postId: input.postId,
+    userId: input.actorId
+  });
+
+  return {
+    postId: input.postId,
+    viewerHasLiked: false
   };
 }
 

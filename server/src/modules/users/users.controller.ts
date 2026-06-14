@@ -1,12 +1,15 @@
 import type { RequestHandler } from "express";
 import { createUnauthorizedError } from "../auth/auth.errors.js";
 import {
+  userRouteParamsSchema,
   searchUsersQuerySchema,
   updateOwnProfileSchema
 } from "./users.schema.js";
 import {
+  followUser,
   getOwnProfile,
   searchUsers,
+  unfollowUser,
   updateOwnProfile
 } from "./users.service.js";
 
@@ -94,6 +97,80 @@ export const updateOwnProfileController: RequestHandler = async (
 
     res.status(200).json({
       profile,
+      requestId: req.requestId
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+function parseUserRouteParams(rawUserId: string | string[] | undefined) {
+  const userId = Array.isArray(rawUserId) ? rawUserId[0] : rawUserId;
+
+  return userRouteParamsSchema.safeParse({ userId });
+}
+
+export const followUserController: RequestHandler = async (req, res, next) => {
+  const parsedParams = parseUserRouteParams(req.params.userId);
+
+  if (!parsedParams.success) {
+    res.status(400).json({
+      error: {
+        code: "VALIDATION_ERROR",
+        details: toValidationDetails(parsedParams.error.issues),
+        message: "Invalid route parameters."
+      },
+      requestId: req.requestId
+    });
+    return;
+  }
+
+  try {
+    if (!req.authUser) {
+      throw createUnauthorizedError();
+    }
+
+    const result = await followUser({
+      targetUserId: parsedParams.data.userId,
+      viewerId: req.authUser.id
+    });
+
+    res.status(200).json({
+      ...result,
+      requestId: req.requestId
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const unfollowUserController: RequestHandler = async (req, res, next) => {
+  const parsedParams = parseUserRouteParams(req.params.userId);
+
+  if (!parsedParams.success) {
+    res.status(400).json({
+      error: {
+        code: "VALIDATION_ERROR",
+        details: toValidationDetails(parsedParams.error.issues),
+        message: "Invalid route parameters."
+      },
+      requestId: req.requestId
+    });
+    return;
+  }
+
+  try {
+    if (!req.authUser) {
+      throw createUnauthorizedError();
+    }
+
+    const result = await unfollowUser({
+      targetUserId: parsedParams.data.userId,
+      viewerId: req.authUser.id
+    });
+
+    res.status(200).json({
+      ...result,
       requestId: req.requestId
     });
   } catch (error) {
