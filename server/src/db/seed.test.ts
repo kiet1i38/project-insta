@@ -103,6 +103,41 @@ describe.sequential("database seed", () => {
 
     expect(guestAuditLog).toBeTruthy();
 
+    await prisma.comment.create({
+      data: {
+        authorId: "10000000-0000-4000-8000-000000000002",
+        content: "Local browser smoke comment that the next seed should remove.",
+        id: "30000000-0000-4000-8000-000000000099",
+        postId: "20000000-0000-4000-8000-000000000001"
+      }
+    });
+
+    await prisma.like.create({
+      data: {
+        postId: "20000000-0000-4000-8000-000000000001",
+        userId: "10000000-0000-4000-8000-000000000002"
+      }
+    });
+
+    await prisma.refreshToken.create({
+      data: {
+        createdAt: new Date("2026-06-14T10:00:00.000Z"),
+        expiresAt: new Date("2026-06-21T10:00:00.000Z"),
+        familyId: "70000000-0000-4000-8000-000000000001",
+        id: "70000000-0000-4000-8000-000000000002",
+        tokenHash: "browser-smoke-refresh-token-hash",
+        userId: "10000000-0000-4000-8000-000000000002"
+      }
+    });
+
+    const countsAfterLocalMutations = await Promise.all([
+      prisma.comment.count(),
+      prisma.like.count(),
+      prisma.refreshToken.count()
+    ]);
+
+    expect(countsAfterLocalMutations).toEqual([2, 2, 1]);
+
     const secondSeed = runRepoScript("db:seed");
 
     expect(secondSeed.status).toBe(0);

@@ -73,6 +73,58 @@ export type OwnPostsResponse = {
   requestId: string;
 };
 
+export type FeedPostAuthor = {
+  avatarUrl: string | null;
+  displayName: string | null;
+  id: string;
+  username: string;
+};
+
+export type FeedPost = {
+  author: FeedPostAuthor;
+  caption: string | null;
+  createdAt: string;
+  id: string;
+  imageUrl: string;
+  updatedAt: string;
+};
+
+export type FeedPageInfo = {
+  hasNextPage: boolean;
+  limit: number;
+  nextCursor: string | null;
+};
+
+export type FeedPostsResponse = {
+  pageInfo: FeedPageInfo;
+  posts: FeedPost[];
+  requestId: string;
+};
+
+export type FeedComment = {
+  authorId: string;
+  content: string;
+  createdAt: string;
+  id: string;
+  postId: string;
+  updatedAt: string;
+};
+
+export type CreateCommentInput = {
+  content: string;
+};
+
+export type CreateCommentResponse = {
+  comment: FeedComment;
+  requestId: string;
+};
+
+export type PostLikeStateResponse = {
+  postId: string;
+  requestId: string;
+  viewerHasLiked: boolean;
+};
+
 export type DeleteOwnPostResponse = {
   deletedPostId: string;
   requestId: string;
@@ -107,6 +159,11 @@ export type SearchUsersInput = {
   cursor?: string | null;
   limit?: number;
   query: string;
+};
+
+export type GetFeedPostsInput = {
+  cursor?: string | null;
+  limit?: number;
 };
 
 export type RegisterResponse = {
@@ -329,6 +386,61 @@ export async function getOwnPosts(): Promise<OwnPostsResponse> {
     includeAccessToken: true,
     method: "GET"
   });
+}
+
+export async function getFeedPosts(
+  input: GetFeedPostsInput = {}
+): Promise<FeedPostsResponse> {
+  const params = new URLSearchParams();
+
+  params.set("limit", String(input.limit ?? 10));
+
+  if (input.cursor) {
+    params.set("cursor", input.cursor);
+  }
+
+  return requestJson<FeedPostsResponse>(`/posts/feed?${params.toString()}`, {
+    includeAccessToken: true,
+    method: "GET"
+  });
+}
+
+export async function likePost(
+  postId: string
+): Promise<PostLikeStateResponse> {
+  return requestJson<PostLikeStateResponse>(
+    `/posts/${encodeURIComponent(postId)}/likes`,
+    {
+      includeAccessToken: true,
+      method: "POST"
+    }
+  );
+}
+
+export async function unlikePost(
+  postId: string
+): Promise<PostLikeStateResponse> {
+  return requestJson<PostLikeStateResponse>(
+    `/posts/${encodeURIComponent(postId)}/likes`,
+    {
+      includeAccessToken: true,
+      method: "DELETE"
+    }
+  );
+}
+
+export async function createComment(
+  postId: string,
+  input: CreateCommentInput
+): Promise<CreateCommentResponse> {
+  return requestJson<CreateCommentResponse>(
+    `/posts/${encodeURIComponent(postId)}/comments`,
+    {
+      body: input,
+      includeAccessToken: true,
+      method: "POST"
+    }
+  );
 }
 
 export async function deleteOwnPost(

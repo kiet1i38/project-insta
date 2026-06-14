@@ -18,6 +18,16 @@ const demoUser = {
   username: "student_demo"
 };
 
+const emptyFeedResponse = {
+  pageInfo: {
+    hasNextPage: false,
+    limit: 2,
+    nextCursor: null
+  },
+  posts: [],
+  requestId: "req-empty-feed"
+};
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     headers: {
@@ -112,13 +122,21 @@ describe("App", () => {
   });
 
   it("does not show guest forms when an authenticated user visits /login directly", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({
-        accessToken: "access-token-789",
-        requestId: "req-refresh-authenticated",
-        user: demoUser
-      })
-    );
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (input === "http://localhost:3001/api/v1/auth/refresh") {
+        return jsonResponse({
+          accessToken: "access-token-789",
+          requestId: "req-refresh-authenticated",
+          user: demoUser
+        });
+      }
+
+      if (input === "http://localhost:3001/api/v1/posts/feed?limit=2") {
+        return jsonResponse(emptyFeedResponse);
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`);
+    });
 
     document.cookie = "cloneinsta_csrf=csrf-456; path=/";
     window.history.pushState({}, "", "/login");
@@ -127,7 +145,8 @@ describe("App", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: /protected feed shell with logout flow/i
+        level: 2,
+        name: /^your feed$/i
       })
     ).toBeInTheDocument();
     expect(
@@ -155,6 +174,10 @@ describe("App", () => {
           });
         }
 
+        if (input === "http://localhost:3001/api/v1/posts/feed?limit=2") {
+          return jsonResponse(emptyFeedResponse);
+        }
+
         throw new Error(`Unexpected fetch request: ${String(input)}`);
       }
     );
@@ -165,7 +188,8 @@ describe("App", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: /protected feed shell with logout flow/i
+        level: 2,
+        name: /^your feed$/i
       })
     ).toBeInTheDocument();
 
@@ -188,7 +212,10 @@ describe("App", () => {
       })
     );
 
-    const logoutInit = fetchSpy.mock.calls[1]?.[1];
+    const logoutCall = fetchSpy.mock.calls.find(
+      ([requestInput]) => requestInput === "http://localhost:3001/api/v1/auth/logout"
+    );
+    const logoutInit = logoutCall?.[1];
     const headers = logoutInit?.headers;
 
     expect(headers).toBeInstanceOf(Headers);
