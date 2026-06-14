@@ -2,6 +2,7 @@ import express from "express";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { requestIdMiddleware } from "./middleware/requestId.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
+import { commentsRouter } from "./modules/comments/comments.routes.js";
 import { healthRouter } from "./modules/health/health.routes.js";
 import { postsRouter } from "./modules/posts/posts.routes.js";
 import { usersRouter } from "./modules/users/users.routes.js";
@@ -20,6 +21,7 @@ app.get("/", (req, res) => {
 });
 
 app.use("/api/v1/auth", authRouter);
+app.use("/api/v1", commentsRouter);
 app.use("/api/v1/health", healthRouter);
 app.use("/api/v1/posts", postsRouter);
 app.use("/api/v1/users", usersRouter);
