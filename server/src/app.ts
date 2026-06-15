@@ -1,6 +1,7 @@
 import express from "express";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { requestIdMiddleware } from "./middleware/requestId.js";
+import { auditRouter } from "./modules/audit/audit.routes.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { commentsRouter } from "./modules/comments/comments.routes.js";
 import { healthRouter } from "./modules/health/health.routes.js";
@@ -22,6 +23,7 @@ app.get("/", (req, res) => {
   });
 });
 
+app.use("/api/v1", auditRouter);
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1", commentsRouter);
 app.use("/api/v1/health", healthRouter);
