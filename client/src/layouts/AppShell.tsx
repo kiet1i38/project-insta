@@ -19,6 +19,13 @@ export function AppShell() {
           { to: "/login", label: "Login" },
           { to: "/register", label: "Register" }
         ];
+  const adminNavItems =
+    status === "authenticated" && user?.role === "ADMIN"
+      ? [
+          { to: "/admin/reports", label: "Moderation" },
+          { to: "/admin/audit-logs", label: "Audit log" }
+        ]
+      : [];
 
   const sessionSummary =
     status === "bootstrapping"
@@ -26,6 +33,11 @@ export function AppShell() {
           title: "Restoring saved session",
           body: "Checking whether a refresh cookie can mint a fresh access token."
         }
+      : status === "authenticated" && user?.role === "ADMIN"
+        ? {
+            title: `Admin session for @${user.username}`,
+            body: "This account can open the moderation queue and audit log routes in addition to the normal product shell."
+          }
       : status === "authenticated" && user
         ? {
             title: `Signed in as @${user.username}`,
@@ -68,18 +80,37 @@ export function AppShell() {
         </div>
 
         <nav className="nav">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                isActive ? "nav-link nav-link-active" : "nav-link"
-              }
-              end={item.to === "/"}
-            >
-              {item.label}
-            </NavLink>
-          ))}
+          <div className="nav-section">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) =>
+                  isActive ? "nav-link nav-link-active" : "nav-link"
+                }
+                end={item.to === "/"}
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </div>
+
+          {adminNavItems.length > 0 ? (
+            <div className="nav-section">
+              <p className="nav-section-label">Admin tools</p>
+              {adminNavItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) =>
+                    isActive ? "nav-link nav-link-active" : "nav-link"
+                  }
+                >
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+          ) : null}
         </nav>
 
         <section className="session-card" aria-live="polite">

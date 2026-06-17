@@ -149,6 +149,132 @@ export type SearchUsersResponse = {
   users: SearchUser[];
 };
 
+export type ModerationReportStatus = "DISMISSED" | "PENDING" | "RESOLVED";
+
+export type ModerationSortOrder = "newest" | "oldest";
+
+export type ModerationReport = {
+  createdAt: string;
+  id: string;
+  reason: string;
+  reporter: {
+    id: string;
+    username: string;
+  };
+  resolvedAt: string | null;
+  status: ModerationReportStatus;
+  target: {
+    comment: {
+      author: {
+        id: string;
+        username: string;
+      };
+      content: string;
+      id: string;
+      isHidden: boolean;
+      postId: string;
+    } | null;
+    post: {
+      author: {
+        id: string;
+        username: string;
+      };
+      caption: string | null;
+      id: string;
+      imageUrl: string;
+      isHidden: boolean;
+    } | null;
+    type: "COMMENT" | "POST" | "USER";
+    user: {
+      displayName: string | null;
+      id: string;
+      status: "ACTIVE" | "BANNED";
+      username: string;
+    } | null;
+  };
+};
+
+export type ModerationQueueResponse = {
+  pageInfo: {
+    hasNextPage: boolean;
+    limit: number;
+    nextCursor: string | null;
+  };
+  reports: ModerationReport[];
+  requestId: string;
+  summary: {
+    pendingCount: number;
+    resolvedCount: number;
+  };
+};
+
+export type ModerationActionResponse = {
+  moderationAction: {
+    action: string;
+    createdAt: string;
+    id: string;
+    note: string | null;
+  };
+  report: {
+    id: string;
+    resolvedAt: string;
+    status: "DISMISSED" | "RESOLVED";
+  };
+  requestId: string;
+};
+
+export type GetModerationReportsInput = {
+  cursor?: string | null;
+  limit?: number;
+  sort?: ModerationSortOrder;
+  status?: ModerationReportStatus;
+};
+
+export type ModerationActionInput = {
+  note?: string;
+};
+
+export type AuditLogActor = {
+  id: string;
+  role: "ADMIN" | "USER";
+  status: "ACTIVE" | "BANNED";
+  username: string;
+};
+
+export type AuditLogEntry = {
+  action: string;
+  actor: AuditLogActor | null;
+  actorMetadata: unknown;
+  createdAt: string;
+  entityId: string | null;
+  entityType: string | null;
+  id: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+};
+
+export type AuditLogListResponse = {
+  auditLogs: AuditLogEntry[];
+  pageInfo: {
+    hasNextPage: boolean;
+    limit: number;
+    nextCursor: string | null;
+  };
+  requestId: string;
+};
+
+export type GetAuditLogsInput = {
+  action?: string;
+  actorId?: string;
+  cursor?: string | null;
+  entityId?: string;
+  entityType?: string;
+  from?: string;
+  limit?: number;
+  sort?: ModerationSortOrder;
+  to?: string;
+};
+
 export type UpdateOwnProfileInput = {
   avatarUrl?: string | null;
   bio?: string | null;
@@ -302,6 +428,42 @@ async function requestJson<T>(
   }
 
   return jsonBody as T;
+}
+
+function setOptionalSearchParam(
+  params: URLSearchParams,
+  key: string,
+  value: string | null | undefined
+) {
+  if (typeof value !== "string") {
+    return;
+  }
+
+  const trimmedValue = value.trim();
+
+  if (trimmedValue.length === 0) {
+    return;
+  }
+
+  params.set(key, trimmedValue);
+}
+
+function toApiDatetimeInput(value: string | undefined) {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmedValue = value.trim();
+
+  if (trimmedValue.length === 0) {
+    return undefined;
+  }
+
+  if (trimmedValue.endsWith("Z")) {
+    return trimmedValue;
+  }
+
+  return new Date(trimmedValue).toISOString();
 }
 
 export function hasStoredCsrfToken(): boolean {
@@ -471,4 +633,113 @@ export async function searchUsers(
     includeAccessToken: true,
     method: "GET"
   });
+}
+
+export async function getModerationReports(
+  input: GetModerationReportsInput = {}
+): Promise<ModerationQueueResponse> {
+  const params = new URLSearchParams();
+
+  params.set("status", input.status ?? "PENDING");
+  params.set("sort", input.sort ?? "newest");
+  params.set("limit", String(input.limit ?? 10));
+
+  if (input.cursor) {
+    params.set("cursor", input.cursor);
+  }
+
+  return requestJson<ModerationQueueResponse>(
+    `/admin/reports?${params.toString()}`,
+    {
+      includeAccessToken: true,
+      method: "GET"
+    }
+  );
+}
+
+export async function dismissModerationReport(
+  reportId: string,
+  input: ModerationActionInput = {}
+): Promise<ModerationActionResponse> {
+  const body =
+    typeof input.note === "string" && input.note.trim().length > 0
+      ? { note: input.note.trim() }
+      : {};
+
+  return requestJson<ModerationActionResponse>(
+    `/admin/reports/${encodeURIComponent(reportId)}/dismiss`,
+    {
+      body,
+      includeAccessToken: true,
+      method: "POST"
+    }
+  );
+}
+
+export async function hideModerationReportTarget(
+  reportId: string,
+  input: { note: string }
+): Promise<ModerationActionResponse> {
+  return requestJson<ModerationActionResponse>(
+    `/admin/reports/${encodeURIComponent(reportId)}/hide-content`,
+    {
+      body: {
+        note: input.note.trim()
+      },
+      includeAccessToken: true,
+      method: "POST"
+    }
+  );
+}
+
+export async function banModerationReportTargetUser(
+  reportId: string,
+  input: { note: string }
+): Promise<ModerationActionResponse> {
+  return requestJson<ModerationActionResponse>(
+    `/admin/reports/${encodeURIComponent(reportId)}/ban-user`,
+    {
+      body: {
+        note: input.note.trim()
+      },
+      includeAccessToken: true,
+      method: "POST"
+    }
+  );
+}
+
+export async function getAuditLogs(
+  input: GetAuditLogsInput = {}
+): Promise<AuditLogListResponse> {
+  const params = new URLSearchParams();
+
+  params.set("limit", String(input.limit ?? 20));
+  params.set("sort", input.sort ?? "newest");
+  setOptionalSearchParam(params, "action", input.action);
+  setOptionalSearchParam(params, "actorId", input.actorId);
+  setOptionalSearchParam(params, "entityId", input.entityId);
+  setOptionalSearchParam(params, "entityType", input.entityType);
+
+  const from = toApiDatetimeInput(input.from);
+  const to = toApiDatetimeInput(input.to);
+
+  if (from) {
+    params.set("from", from);
+  }
+
+  if (to) {
+    params.set("to", to);
+  }
+
+  if (input.cursor) {
+    params.set("cursor", input.cursor);
+  }
+
+  return requestJson<AuditLogListResponse>(
+    `/admin/audit-logs?${params.toString()}`,
+    {
+      includeAccessToken: true,
+      method: "GET"
+    }
+  );
 }

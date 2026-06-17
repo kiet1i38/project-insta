@@ -1,8 +1,11 @@
+import { AdminRoute } from "./AdminRoute";
 import { Route, Routes } from "react-router-dom";
 import { AppShell } from "../layouts/AppShell";
+import { AuditLogPage } from "../pages/AuditLogPage";
 import { EditProfilePage } from "../pages/EditProfilePage";
 import { FeedPage } from "../pages/FeedPage";
 import { LoginPage } from "../pages/LoginPage";
+import { ModerationQueuePage } from "../pages/ModerationQueuePage";
 import { NotFoundPage } from "../pages/NotFoundPage";
 import { ProfilePage } from "../pages/ProfilePage";
 import { RegisterPage } from "../pages/RegisterPage";
@@ -19,6 +22,10 @@ export function AppRoutes() {
           <Route element={<ProfilePage />} path="profile" />
           <Route element={<EditProfilePage />} path="profile/edit" />
           <Route element={<SearchPage />} path="search" />
+          <Route element={<AdminRoute />}>
+            <Route element={<ModerationQueuePage />} path="admin/reports" />
+            <Route element={<AuditLogPage />} path="admin/audit-logs" />
+          </Route>
         </Route>
         <Route element={<GuestRoute />}>
           <Route element={<LoginPage />} path="login" />

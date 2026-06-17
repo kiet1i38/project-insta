@@ -52,9 +52,23 @@ a {
 }
 
 .nav {
+  display: grid;
+  gap: 1rem;
+}
+
+.nav-section {
   display: flex;
   gap: 0.75rem;
   flex-wrap: wrap;
+}
+
+.nav-section-label {
+  width: 100%;
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(248, 251, 255, 0.72);
 }
 
 .session-card {
@@ -168,7 +182,19 @@ a {
   resize: vertical;
 }
 
+.form-field select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid #c7d2e0;
+  border-radius: 0.9rem;
+  font: inherit;
+  color: #111827;
+  background: #ffffff;
+}
+
 .form-field input:focus,
+.form-field select:focus,
 .form-field textarea:focus {
   outline: 2px solid #0f62fe;
   outline-offset: 2px;
@@ -297,6 +323,32 @@ a {
   color: #172033;
   background: #ffffff;
   font-weight: 700;
+}
+
+.danger-button {
+  min-height: 46px;
+  padding: 0.8rem 1rem;
+  border: 0;
+  border-radius: 0.9rem;
+  background: #c81e1e;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.danger-button:disabled {
+  cursor: wait;
+  opacity: 0.74;
+}
+
+.danger-button:hover {
+  background: #b91c1c;
+}
+
+.danger-button:focus-visible {
+  outline: 2px solid #f87171;
+  outline-offset: 2px;
 }
 
 .profile-page {
@@ -709,6 +761,255 @@ a {
   justify-self: start;
 }
 
+.admin-page {
+  display: grid;
+  gap: 1.5rem;
+  max-width: 1180px;
+}
+
+.admin-page-header {
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  align-items: start;
+  flex-wrap: wrap;
+}
+
+.admin-page-header h2 {
+  margin: 0;
+}
+
+.admin-page-copy {
+  margin: 0.55rem 0 0;
+  color: #4b5563;
+  max-width: 64ch;
+}
+
+.admin-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+}
+
+.admin-summary-pill {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 160px;
+  padding: 0.95rem 1rem;
+  border: 1px solid #bfd5ee;
+  border-radius: 1.1rem;
+  background: #eff6ff;
+}
+
+.admin-summary-pill span {
+  color: #0f62fe;
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.admin-summary-pill strong {
+  font-size: 1.05rem;
+  color: #172033;
+}
+
+.admin-summary-pill-muted {
+  background: #f8fafc;
+}
+
+.admin-summary-pill-muted span {
+  color: #64748b;
+}
+
+.admin-toolbar,
+.admin-filter-grid,
+.admin-filter-actions,
+.moderation-action-row {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-toolbar {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.admin-filter-form {
+  display: grid;
+  gap: 1rem;
+  padding: 1.2rem;
+  border: 1px solid #dbe5f0;
+  border-radius: 1.2rem;
+  background: #f8fbff;
+}
+
+.admin-filter-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.admin-filter-actions {
+  grid-template-columns: repeat(auto-fit, minmax(180px, max-content));
+  align-items: center;
+}
+
+.moderation-layout {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+  align-items: start;
+}
+
+.moderation-report-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.moderation-report-card {
+  display: grid;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 1.15rem;
+  border: 1px solid #dbe5f0;
+  border-radius: 1.2rem;
+  background: #ffffff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.moderation-report-card:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08);
+}
+
+.moderation-report-card-active {
+  border-color: #0f62fe;
+  box-shadow: 0 16px 32px rgba(15, 98, 254, 0.12);
+  background: linear-gradient(180deg, #ffffff 0%, #f6faff 100%);
+}
+
+.moderation-report-card h3,
+.admin-empty-state h3 {
+  margin: 0;
+}
+
+.moderation-report-meta {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.moderation-report-eyebrow,
+.moderation-report-date,
+.moderation-target-copy,
+.moderation-report-preview,
+.moderation-report-reason,
+.moderation-target-details p {
+  margin: 0;
+}
+
+.moderation-report-eyebrow {
+  color: #0f62fe;
+  font-weight: 700;
+}
+
+.moderation-report-date,
+.moderation-report-preview,
+.moderation-target-copy,
+.moderation-target-details p {
+  color: #4b5563;
+}
+
+.moderation-report-reason {
+  font-weight: 700;
+  color: #172033;
+}
+
+.moderation-review-panel {
+  position: sticky;
+  top: 2rem;
+}
+
+.moderation-review-card,
+.audit-log-panel {
+  display: grid;
+  gap: 1rem;
+  padding: 1.2rem;
+  border: 1px solid #dbe5f0;
+  border-radius: 1.2rem;
+  background: #ffffff;
+}
+
+.moderation-review-card h3 {
+  margin: 0;
+}
+
+.moderation-target-image {
+  width: 100%;
+  border-radius: 1rem;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background:
+    linear-gradient(145deg, rgba(15, 98, 254, 0.12), rgba(56, 189, 248, 0.32)),
+    linear-gradient(180deg, #f8fbff 0%, #e6eef9 100%);
+}
+
+.moderation-target-placeholder,
+.admin-empty-state {
+  display: grid;
+  gap: 0.55rem;
+  padding: 1.1rem;
+  border: 1px dashed #bfd5ee;
+  border-radius: 1rem;
+  background: #f8fbff;
+}
+
+.moderation-target-placeholder span,
+.admin-empty-state p {
+  color: #4b5563;
+}
+
+.moderation-action-row {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.moderation-action-button {
+  justify-content: center;
+}
+
+.moderation-load-more {
+  justify-self: start;
+}
+
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.audit-table th,
+.audit-table td {
+  padding: 0.9rem 0.75rem;
+  border-bottom: 1px solid #e5edf7;
+  text-align: left;
+  vertical-align: top;
+}
+
+.audit-table th {
+  color: #4b5563;
+  font-size: 0.9rem;
+}
+
+.audit-action-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.55rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
 .route-gate-panel h2 {
   margin: 0 0 0.75rem;
 }
@@ -742,6 +1043,15 @@ a {
 
   .profile-stats {
     grid-template-columns: 1fr;
+  }
+
+  .admin-page-header,
+  .moderation-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .moderation-review-panel {
+    position: static;
   }
 
   .feed-card-header,
