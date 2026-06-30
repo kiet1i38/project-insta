@@ -73,6 +73,16 @@ export type OwnPostsResponse = {
   requestId: string;
 };
 
+export type CreatePostInput = {
+  caption?: string;
+  image: File;
+};
+
+export type CreatePostResponse = {
+  post: OwnPost;
+  requestId: string;
+};
+
 export type FeedPostAuthor = {
   avatarUrl: string | null;
   displayName: string | null;
@@ -615,6 +625,57 @@ export async function deleteOwnPost(
       method: "DELETE"
     }
   );
+}
+
+export async function createPost(
+  input: CreatePostInput
+): Promise<CreatePostResponse> {
+  const headers = new Headers();
+  const accessToken = getAccessToken();
+
+  if (accessToken) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  }
+
+  const formData = new FormData();
+  formData.set("image", input.image);
+
+  const trimmedCaption = input.caption?.trim();
+
+  if (trimmedCaption) {
+    formData.set("caption", trimmedCaption);
+  }
+
+  const response = await fetch(`${apiBaseUrl}/posts`, {
+    body: formData,
+    credentials: "include",
+    headers,
+    method: "POST"
+  });
+
+  const jsonBody = await parseJsonBody<ApiErrorBody | CreatePostResponse>(response);
+
+  if (!response.ok) {
+    const errorBody = jsonBody as ApiErrorBody | null;
+
+    throw new ApiError(
+      response.status,
+      errorBody?.error?.code ?? "UNKNOWN_API_ERROR",
+      errorBody?.error?.message ?? "Something went wrong.",
+      errorBody?.error?.details ?? [],
+      errorBody?.requestId ?? null
+    );
+  }
+
+  if (jsonBody === null) {
+    throw new ApiError(
+      response.status,
+      "EMPTY_RESPONSE",
+      "Expected a JSON response from the API."
+    );
+  }
+
+  return jsonBody as CreatePostResponse;
 }
 
 export async function searchUsers(

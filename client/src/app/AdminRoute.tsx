@@ -8,11 +8,8 @@ export function AdminRoute() {
     return (
       <section className="panel route-gate-panel">
         <p className="eyebrow">Restoring session</p>
-        <h2>Checking whether this admin area can be reopened safely</h2>
-        <p>
-          The client waits for the shared auth bootstrap before deciding whether
-          moderation tools should be unlocked.
-        </p>
+        <h2>Checking admin access</h2>
+        <p>Hang on while we confirm that this workspace can open admin tools.</p>
       </section>
     );
   }

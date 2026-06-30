@@ -160,8 +160,8 @@ export function AuditLogPage() {
           <p className="eyebrow">Admin tools</p>
           <h2>Audit log</h2>
           <p className="admin-page-copy">
-            Review sensitive actions and moderation history without exposing
-            hidden secrets from the backend metadata payload.
+            Review sensitive actions, moderation history, and system activity in
+            one place.
           </p>
         </div>
       </div>

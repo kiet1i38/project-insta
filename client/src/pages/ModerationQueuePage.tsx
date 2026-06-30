@@ -198,8 +198,8 @@ export function ModerationQueuePage() {
           <p className="eyebrow">Admin tools</p>
           <h2>Moderation queue</h2>
           <p className="admin-page-copy">
-            Review reported posts, comments, and accounts through the live admin
-            contract before taking a recorded moderation action.
+            Review reports, inspect the context, and record the next moderation
+            step.
           </p>
         </div>
 

@@ -10,11 +10,8 @@ export function ProtectedRoute() {
     return (
       <section className="panel route-gate-panel">
         <p className="eyebrow">Restoring session</p>
-        <h2>Checking whether this protected screen can be reopened safely</h2>
-        <p>
-          The client waits for the refresh-cookie flow before deciding whether
-          to show the feed or redirect the guest back to login.
-        </p>
+        <h2>Checking your session</h2>
+        <p>Hang on while we confirm whether you can reopen this screen.</p>
       </section>
     );
   }

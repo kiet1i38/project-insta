@@ -207,6 +207,13 @@ export async function seedDatabase(client: PrismaClient = prisma): Promise<SeedS
         }
       })
     ]);
+
+    await tx.post.deleteMany({
+      where: {
+        authorId: { in: demoUserIds as unknown as string[] },
+        id: { notIn: demoPostIds as unknown as string[] }
+      }
+    });
   });
 
   await client.user.upsert({

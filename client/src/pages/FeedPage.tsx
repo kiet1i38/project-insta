@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   ApiError,
   createComment,
@@ -11,6 +12,36 @@ import {
 } from "../modules/auth/authApi";
 
 const feedPageSize = 2;
+const feedQuickActions = [
+  {
+    copy: "Jump into discovery to find more people and fill the feed faster.",
+    label: "Explore people",
+    to: "/search"
+  },
+  {
+    copy: "Refresh your own presentation, avatar, and bio from the same shared UI system.",
+    label: "Edit profile",
+    to: "/profile/edit"
+  }
+] as const;
+
+const feedSuggestedAccounts = [
+  {
+    description: "Great baseline account for user-flow smoke tests and profile checks.",
+    label: "Alice Demo",
+    username: "alice_demo"
+  },
+  {
+    description: "Useful second account when you want to compare search and follow states.",
+    label: "Bob Demo",
+    username: "bob_demo"
+  },
+  {
+    description: "Keeps the admin moderation and audit routes easy to reach during QA.",
+    label: "Admin Demo",
+    username: "admin_demo"
+  }
+] as const;
 
 type FeedCard = FeedPost & {
   comments: FeedComment[];
@@ -53,6 +84,16 @@ function getAvatarLabel(author: FeedPostAuthor): string {
 
 function getPostLabel(post: FeedPost): string {
   return post.caption?.trim() || `post by ${getAuthorLabel(post.author)}`;
+}
+
+function getFeedMetaLine(post: FeedCard): string {
+  if (post.comments.length > 0) {
+    return `${post.comments.length} new comment${post.comments.length === 1 ? "" : "s"} added in this session`;
+  }
+
+  return post.viewerHasLiked
+    ? "Liked in this session. Add a note to keep the conversation moving."
+    : "Like or comment to keep this post active in your local demo flow.";
 }
 
 function formatPostDate(isoTimestamp: string): string {
@@ -314,157 +355,207 @@ export function FeedPage() {
 
   return (
     <section className="panel feed-page">
-      <div className="feed-page-heading">
-        <div>
-          <p className="eyebrow">Slice 7D</p>
-          <h2>Your feed</h2>
-          <p className="feed-page-copy">
-            Real feed cards now come from the protected backend endpoint, and
-            each card can trigger the matching like and comment routes without
-            dropping back to placeholder UI.
-          </p>
-        </div>
-        {errorMessage ? (
-          <p className="form-status" data-tone="error" role="status">
-            {errorMessage}
-          </p>
-        ) : null}
-      </div>
+      <div className="feed-page-layout">
+        <div className="feed-main-column">
+          <div className="feed-page-heading">
+            <div>
+              <p className="eyebrow">Slice 7D</p>
+              <h2>Your feed</h2>
+              <p className="feed-page-copy">
+                Keep up with the latest posts from people you follow and react in
+                the moment with quick likes and comments.
+              </p>
+            </div>
+            {errorMessage ? (
+              <p className="form-status" data-tone="error" role="status">
+                {errorMessage}
+              </p>
+            ) : null}
+          </div>
 
-      {posts.length === 0 ? (
-        <section className="profile-empty-state">
-          <h3>Your feed is empty right now.</h3>
-          <p>
-            Follow more classmates or create new posts so the feed can fill
-            with visible content from the backend.
-          </p>
-        </section>
-      ) : (
-        <div className="feed-list">
-          {posts.map((post) => {
-            const postLabel = getPostLabel(post);
-            const authorLabel = getAuthorLabel(post.author);
+          {posts.length === 0 ? (
+            <section className="profile-empty-state">
+              <h3>Your feed is empty right now.</h3>
+              <p>
+                Follow more classmates or create new posts so the feed can fill
+                with visible content from the backend.
+              </p>
+            </section>
+          ) : (
+            <div className="feed-list">
+              {posts.map((post) => {
+                const postLabel = getPostLabel(post);
+                const authorLabel = getAuthorLabel(post.author);
 
-            return (
-              <article className="feed-card" key={post.id}>
-                <div className="feed-card-header">
-                  <div className="feed-author">
-                    {post.author.avatarUrl ? (
-                      <img
-                        alt={`Avatar for ${authorLabel}`}
-                        className="feed-author-avatar"
-                        src={post.author.avatarUrl}
-                      />
-                    ) : (
-                      <div
-                        aria-hidden="true"
-                        className="feed-author-avatar feed-author-avatar-fallback"
-                      >
-                        {getAvatarLabel(post.author)}
+                return (
+                  <article className="feed-card" key={post.id}>
+                    <div className="feed-card-header">
+                      <div className="feed-author">
+                        {post.author.avatarUrl ? (
+                          <img
+                            alt={`Avatar for ${authorLabel}`}
+                            className="feed-author-avatar"
+                            src={post.author.avatarUrl}
+                          />
+                        ) : (
+                          <div
+                            aria-hidden="true"
+                            className="feed-author-avatar feed-author-avatar-fallback"
+                          >
+                            {getAvatarLabel(post.author)}
+                          </div>
+                        )}
+                        <div>
+                          <h3>{authorLabel}</h3>
+                          <p className="profile-handle">@{post.author.username}</p>
+                        </div>
                       </div>
-                    )}
-                    <div>
-                      <h3>{authorLabel}</h3>
-                      <p className="profile-handle">@{post.author.username}</p>
+                      <p className="feed-post-date">
+                        Posted {formatPostDate(post.createdAt)}
+                      </p>
                     </div>
-                  </div>
-                  <p className="feed-post-date">
-                    Posted {formatPostDate(post.createdAt)}
-                  </p>
-                </div>
 
-                <img
-                  alt={post.caption ? `Feed post for ${post.caption}` : "Feed post image"}
-                  className="feed-post-media"
-                  src={post.imageUrl}
-                />
-
-                <div className="feed-card-content">
-                  <p className="feed-post-caption">
-                    {post.caption ?? "Untitled post"}
-                  </p>
-
-                  <div className="feed-interactions">
-                    <button
-                      aria-label={`${post.viewerHasLiked ? "Unlike" : "Like"} ${postLabel}`}
-                      className="primary-button feed-action-button"
-                      disabled={post.isLikeSubmitting}
-                      onClick={() => void handleToggleLike(post.id)}
-                      type="button"
-                    >
-                      {post.isLikeSubmitting
-                        ? "Saving..."
-                        : post.viewerHasLiked
-                          ? "Unlike"
-                          : "Like"}
-                    </button>
-                    {post.viewerHasLiked ? (
-                      <p className="feed-inline-status">You liked this post.</p>
-                    ) : null}
-                  </div>
-
-                  <form
-                    className="feed-comment-form"
-                    noValidate
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void handleSubmitComment(post.id);
-                    }}
-                  >
-                    <input
-                      aria-invalid={post.commentError ? "true" : "false"}
-                      aria-label={`Comment on ${postLabel}`}
-                      className="feed-comment-input"
-                      onChange={(event) =>
-                        handleCommentDraftChange(post.id, event.target.value)
+                    <img
+                      alt={
+                        post.caption ? `Feed post for ${post.caption}` : "Feed post image"
                       }
-                      placeholder="Write a comment"
-                      type="text"
-                      value={post.commentDraft}
+                      className="feed-post-media"
+                      src={post.imageUrl}
                     />
-                    <button
-                      aria-label={`Post comment on ${postLabel}`}
-                      className="primary-button feed-comment-button"
-                      disabled={post.isCommentSubmitting}
-                      type="submit"
-                    >
-                      {post.isCommentSubmitting ? "Posting..." : "Post comment"}
-                    </button>
-                  </form>
 
-                  {post.commentError ? (
-                    <p className="field-error" role="status">
-                      {post.commentError}
-                    </p>
-                  ) : null}
+                    <div className="feed-card-content">
+                      <div className="feed-post-copy">
+                        <p className="feed-post-caption">
+                          {post.caption ?? "Untitled post"}
+                        </p>
+                        <p className="feed-post-meta-line">{getFeedMetaLine(post)}</p>
+                      </div>
 
-                  {post.comments.length > 0 ? (
-                    <ul className="feed-comment-list">
-                      {post.comments.map((comment) => (
-                        <li className="feed-comment-item" key={comment.id}>
-                          <span className="feed-comment-author">You</span>
-                          <span>{comment.content}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </div>
-              </article>
-            );
-          })}
+                      <div className="feed-interactions">
+                        <button
+                          aria-label={`${post.viewerHasLiked ? "Unlike" : "Like"} ${postLabel}`}
+                          className="primary-button feed-action-button"
+                          disabled={post.isLikeSubmitting}
+                          onClick={() => void handleToggleLike(post.id)}
+                          type="button"
+                        >
+                          {post.isLikeSubmitting
+                            ? "Saving..."
+                            : post.viewerHasLiked
+                              ? "Unlike"
+                              : "Like"}
+                        </button>
+                        {post.viewerHasLiked ? (
+                          <p className="feed-inline-status">You liked this post.</p>
+                        ) : null}
+                      </div>
+
+                      <form
+                        className="feed-comment-form"
+                        noValidate
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void handleSubmitComment(post.id);
+                        }}
+                      >
+                        <input
+                          aria-invalid={post.commentError ? "true" : "false"}
+                          aria-label={`Comment on ${postLabel}`}
+                          className="feed-comment-input"
+                          onChange={(event) =>
+                            handleCommentDraftChange(post.id, event.target.value)
+                          }
+                          placeholder="Write a comment"
+                          type="text"
+                          value={post.commentDraft}
+                        />
+                        <button
+                          aria-label={`Post comment on ${postLabel}`}
+                          className="primary-button feed-comment-button"
+                          disabled={post.isCommentSubmitting}
+                          type="submit"
+                        >
+                          {post.isCommentSubmitting ? "Posting..." : "Post comment"}
+                        </button>
+                      </form>
+
+                      {post.commentError ? (
+                        <p className="field-error" role="status">
+                          {post.commentError}
+                        </p>
+                      ) : null}
+
+                      {post.comments.length > 0 ? (
+                        <ul className="feed-comment-list">
+                          {post.comments.map((comment) => (
+                            <li className="feed-comment-item" key={comment.id}>
+                              <span className="feed-comment-author">You</span>
+                              <span>{comment.content}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+
+          {pageInfo?.hasNextPage ? (
+            <button
+              className="primary-button feed-load-more"
+              disabled={isLoadingMore}
+              onClick={() => void handleLoadMore()}
+              type="button"
+            >
+              {isLoadingMore ? "Loading more..." : "Load more posts"}
+            </button>
+          ) : null}
         </div>
-      )}
 
-      {pageInfo?.hasNextPage ? (
-        <button
-          className="primary-button feed-load-more"
-          disabled={isLoadingMore}
-          onClick={() => void handleLoadMore()}
-          type="button"
-        >
-          {isLoadingMore ? "Loading more..." : "Load more posts"}
-        </button>
-      ) : null}
+        <aside className="feed-side-column" aria-label="Feed side rail">
+          <section className="feed-rail-card">
+            <div className="feed-rail-heading">
+              <h3>Quick actions</h3>
+              <p>Move between the key user surfaces without leaving the refreshed UI flow.</p>
+            </div>
+            <div className="feed-rail-actions">
+              {feedQuickActions.map((action) => (
+                <Link className="feed-rail-action" key={action.to} to={action.to}>
+                  <strong>{action.label}</strong>
+                  <span>{action.copy}</span>
+                </Link>
+              ))}
+            </div>
+          </section>
+
+          <section className="feed-rail-card">
+            <div className="feed-rail-heading">
+              <h3>Suggested demo accounts</h3>
+              <p>Useful seed accounts to keep nearby while you smoke-test the user-facing flow.</p>
+            </div>
+            <div className="feed-demo-list">
+              {feedSuggestedAccounts.map((account) => (
+                <article className="feed-demo-card" key={account.username}>
+                  <div className="feed-demo-avatar" aria-hidden="true">
+                    {account.label
+                      .split(/\s+/)
+                      .slice(0, 2)
+                      .map((part) => part[0]?.toUpperCase() ?? "")
+                      .join("")}
+                  </div>
+                  <div className="feed-demo-copy">
+                    <strong>{account.label}</strong>
+                    <p>@{account.username}</p>
+                    <span>{account.description}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        </aside>
+      </div>
     </section>
   );
 }

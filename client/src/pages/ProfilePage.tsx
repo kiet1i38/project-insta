@@ -208,101 +208,101 @@ export function ProfilePage() {
   return (
     <section className="panel profile-page">
       <div className="profile-hero">
-        <div className="profile-avatar-stack">
-          {profile.avatarUrl ? (
-            <img
-              alt={`Avatar for ${profile.displayName ?? profile.username}`}
-              className="profile-avatar"
-              src={profile.avatarUrl}
-            />
-          ) : (
-            <div aria-hidden="true" className="profile-avatar profile-avatar-fallback">
-              {avatarLabel}
+        {profile.avatarUrl ? (
+          <img
+            alt={`Avatar for ${profile.displayName ?? profile.username}`}
+            className="profile-avatar"
+            src={profile.avatarUrl}
+          />
+        ) : (
+          <div aria-hidden="true" className="profile-avatar profile-avatar-fallback">
+            {avatarLabel}
+          </div>
+        )}
+
+        <div className="profile-main">
+          <div className="profile-headline-row">
+            <div className="profile-headline-copy">
+              <p className="profile-kicker">Profile</p>
+              <h2>Your profile</h2>
+              <p className="profile-username-display">@{profile.username}</p>
             </div>
-          )}
-          <p className="eyebrow">Slice 6C</p>
-        </div>
 
-        <div className="profile-copy">
-          <h2>Your profile</h2>
-          <p className="profile-handle">@{profile.username}</p>
-          <p className="profile-name">{profile.displayName ?? profile.username}</p>
-          <p className="profile-bio">
-            {profile.bio ?? "Add a short bio so classmates and reviewers can understand your account story faster."}
-          </p>
-        </div>
+            <div className="profile-hero-actions">
+              <Link
+                className="button-link-inline secondary-inline-link"
+                state={{ profile }}
+                to="/profile/edit"
+              >
+                Edit profile
+              </Link>
+            </div>
+          </div>
 
-        <div className="profile-actions">
-          {notice ? (
-            <p className="form-status" data-tone="info" role="status">
-              {notice}
+          <div className="profile-stat-inline">
+            <div className="profile-stat-inline-item">
+              <strong>{profile.counts.posts}</strong>
+              <span>Posts</span>
+            </div>
+            <div className="profile-stat-inline-item">
+              <strong>{profile.counts.followers}</strong>
+              <span>Followers</span>
+            </div>
+            <div className="profile-stat-inline-item">
+              <strong>{profile.counts.following}</strong>
+              <span>Following</span>
+            </div>
+          </div>
+
+          <div className="profile-copy">
+            <p className="profile-name">{profile.displayName ?? profile.username}</p>
+            <p className="profile-bio">
+              {profile.bio ??
+                "Add a short bio so classmates and reviewers can understand your account story faster."}
             </p>
-          ) : null}
-          {errorMessage ? (
-            <p className="form-status" data-tone="error" role="status">
-              {errorMessage}
-            </p>
-          ) : null}
-          <Link
-            className="primary-button button-link-inline"
-            state={{ profile }}
-            to="/profile/edit"
-          >
-            Edit profile
-          </Link>
+            <div className="profile-meta-pills">
+              <span className="profile-meta-pill">{profile.role}</span>
+              <span className="profile-meta-pill">{profile.status}</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="profile-stats">
-        <article className="mini-card profile-stat-card">
-          <strong>{profile.counts.posts}</strong>
-          <span>Posts</span>
-        </article>
-        <article className="mini-card profile-stat-card">
-          <strong>{profile.counts.followers}</strong>
-          <span>Followers</span>
-        </article>
-        <article className="mini-card profile-stat-card">
-          <strong>{profile.counts.following}</strong>
-          <span>Following</span>
-        </article>
-      </div>
-
       <section className="profile-section">
-        <div className="profile-section-heading">
-          <h3>Profile summary</h3>
-          <p>Protected account details now come from the backend safe DTO, not hard-coded client mock data.</p>
+        <div className="profile-gallery-bar">
+          <div className="profile-gallery-tabs" aria-label="Profile content overview">
+            <span className="profile-gallery-tab profile-gallery-tab-active">Posts</span>
+            <span className="profile-gallery-tab">{profile.role}</span>
+            <span className="profile-gallery-tab">{profile.status}</span>
+          </div>
+          <div className="profile-gallery-feedback">
+            {notice ? (
+              <p className="form-status" data-tone="info" role="status">
+                {notice}
+              </p>
+            ) : null}
+            {errorMessage ? (
+              <p className="form-status" data-tone="error" role="status">
+                {errorMessage}
+              </p>
+            ) : null}
+          </div>
         </div>
-        <div className="card-grid">
-          <article className="mini-card">
-            <h4>Email</h4>
-            <p>{profile.email}</p>
-          </article>
-          <article className="mini-card">
-            <h4>Role and status</h4>
-            <p>
-              {profile.role} · {profile.status}
-            </p>
-          </article>
-        </div>
-      </section>
 
-      <section className="profile-section">
         <div className="profile-section-heading">
           <h3>Posts</h3>
           <p>
-            Real profile cards now come from the backend post module, and each
-            card can soft-delete through the matching owner/admin endpoint.
+            Visible posts from your account stay together in one clean gallery
+            that is easy to scan and manage.
           </p>
         </div>
 
         {posts.length === 0 ? (
           <div className="profile-empty-state">
-            <h4>No posts yet. Create your first post in the upcoming post slice.</h4>
+            <h4>No posts yet. Share your first photo when you are ready.</h4>
             <p>
-              The profile shell is ready, so the next content-focused slice can
-              plug real media cards into this area without rebuilding the account
-              header or edit flow.
+              Once you publish something, it will appear here in the same
+              profile grid.
             </p>
           </div>
         ) : (
@@ -310,7 +310,11 @@ export function ProfilePage() {
             {posts.map((post) => (
               <article className="profile-post-tile" key={post.id}>
                 <img
-                  alt={post.caption ? `Post image for ${post.caption}` : "Profile post image"}
+                  alt={
+                    post.caption
+                      ? `Post image for ${post.caption}`
+                      : "Profile post image"
+                  }
                   className="profile-post-media"
                   src={post.imageUrl}
                 />

@@ -96,12 +96,11 @@ export function LoginPage() {
   return (
     <section className="panel auth-page">
       <div className="auth-copy">
-        <p className="eyebrow">Slice 4C</p>
+        <p className="auth-kicker">Welcome back</p>
         <h2>Log back into your photo-sharing workspace</h2>
         <p>
-          Protected pages now send guests here. Submit valid credentials to
-          reopen the feed, keep the access token in memory, and let the refresh
-          cookie rebuild the session after reload.
+          Sign in to reopen your feed, profile, and the rest of your protected
+          workspace.
         </p>
       </div>
 
@@ -113,6 +112,7 @@ export function LoginPage() {
             name="identifier"
             type="text"
             autoComplete="username"
+            placeholder="name@example.com or your handle"
             value={values.identifier}
             onChange={(event) => updateField("identifier", event.target.value)}
             aria-invalid={errors.identifier ? "true" : "false"}
@@ -128,12 +128,19 @@ export function LoginPage() {
         </label>
 
         <label className="form-field" htmlFor="login-password">
-          <span>Password</span>
+          <span className="form-field-heading">
+            <span>Password</span>
+            <span className="field-inline-hint">
+              Password reset is still out of scope
+            </span>
+          </span>
           <input
+            aria-label="Password"
             id="login-password"
             name="password"
             type="password"
             autoComplete="current-password"
+            placeholder="Enter your password"
             value={values.password}
             onChange={(event) => updateField("password", event.target.value)}
             aria-invalid={errors.password ? "true" : "false"}

@@ -13,11 +13,8 @@ export function GuestRoute() {
     return (
       <section className="panel route-gate-panel">
         <p className="eyebrow">Restoring session</p>
-        <h2>Checking whether a saved session should skip the guest screens</h2>
-        <p>
-          Login and register stay on hold until the refresh-cookie bootstrap
-          finishes, so authenticated users do not flash the guest forms.
-        </p>
+        <h2>Checking your session</h2>
+        <p>Hang on while we decide whether to reopen the app or keep you here.</p>
       </section>
     );
   }

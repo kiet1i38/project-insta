@@ -134,7 +134,13 @@ describe("Feed UI", () => {
     expect(
       await screen.findByRole("heading", { level: 2, name: /^your feed$/i })
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^feed$/i })).toHaveAttribute(
+    expect(
+      screen.getByRole("heading", { level: 3, name: /quick actions/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 3, name: /suggested demo accounts/i })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^home$/i })).toHaveAttribute(
       "aria-current",
       "page"
     );

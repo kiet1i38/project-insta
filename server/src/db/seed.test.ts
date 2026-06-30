@@ -130,13 +130,23 @@ describe.sequential("database seed", () => {
       }
     });
 
+    await prisma.post.create({
+      data: {
+        authorId: "10000000-0000-4000-8000-000000000002",
+        caption: "Local create-post smoke artifact that the next seed should remove.",
+        id: "20000000-0000-4000-8000-000000000099",
+        imageUrl: "/uploads/local-smoke-post.png"
+      }
+    });
+
     const countsAfterLocalMutations = await Promise.all([
+      prisma.post.count(),
       prisma.comment.count(),
       prisma.like.count(),
       prisma.refreshToken.count()
     ]);
 
-    expect(countsAfterLocalMutations).toEqual([2, 2, 1]);
+    expect(countsAfterLocalMutations).toEqual([3, 2, 2, 1]);
 
     const secondSeed = runRepoScript("db:seed");
 

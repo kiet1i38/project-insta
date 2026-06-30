@@ -142,7 +142,7 @@ describe("Profile UI", () => {
       screen.getByRole("heading", { name: /^posts$/i })
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/no posts yet\. create your first post in the upcoming post slice\./i)
+      screen.getByText(/no posts yet\. share your first photo when you are ready\./i)
     ).toBeInTheDocument();
 
     await waitFor(() => {

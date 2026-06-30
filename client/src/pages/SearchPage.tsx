@@ -6,6 +6,27 @@ import {
 } from "../modules/auth/authApi";
 
 const searchPageSize = 2;
+const suggestedQueries = ["alice", "bob", "admin", "demo"];
+const featuredSearches = [
+  {
+    description: "Open the seeded creator profile used in most user-flow smoke tests.",
+    label: "Alice Demo",
+    query: "alice",
+    username: "alice_demo"
+  },
+  {
+    description: "Jump to the second demo account and compare another result card.",
+    label: "Bob Demo",
+    query: "bob",
+    username: "bob_demo"
+  },
+  {
+    description: "Reach the admin account quickly when you need moderation UI checks.",
+    label: "Admin Demo",
+    query: "admin",
+    username: "admin_demo"
+  }
+] as const;
 
 type SearchPageInfo = {
   hasNextPage: boolean;
@@ -50,10 +71,8 @@ export function SearchPage() {
     );
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const trimmedQuery = queryInput.trim();
+  async function submitSearch(rawQuery: string) {
+    const trimmedQuery = rawQuery.trim();
 
     if (!trimmedQuery) {
       setValidationMessage("Enter a search query first.");
@@ -85,6 +104,11 @@ export function SearchPage() {
     }
   }
 
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await submitSearch(queryInput);
+  }
+
   async function handleLoadMore() {
     if (!pageInfo?.hasNextPage || !pageInfo.nextCursor) {
       return;
@@ -110,14 +134,18 @@ export function SearchPage() {
     }
   }
 
+  function handleQuickSearch(nextQuery: string) {
+    setQueryInput(nextQuery);
+    void submitSearch(nextQuery);
+  }
+
   return (
     <section className="panel search-page">
-      <div className="auth-copy">
-        <p className="eyebrow">Slice 5C</p>
+      <div className="auth-copy search-hero">
+        <p className="search-kicker">Discover</p>
         <h2>Search people</h2>
         <p>
-          Search active users by username or display name through the protected
-          backend contract instead of relying on hard-coded frontend mock cards.
+          Find classmates, creators, and friends by username or display name.
         </p>
       </div>
 
@@ -136,7 +164,7 @@ export function SearchPage() {
             }}
             aria-invalid={validationMessage ? "true" : "false"}
             aria-describedby={validationMessage ? "search-query-error" : undefined}
-            placeholder="Try alice, ali, or a classmate display name"
+            placeholder="Try alice, bob, or a classmate display name"
           />
           {validationMessage ? (
             <small className="field-error" id="search-query-error">
@@ -157,14 +185,30 @@ export function SearchPage() {
         </div>
       </form>
 
+      <section className="search-suggestion-section">
+        <div className="profile-section-heading">
+          <h3>Suggested searches</h3>
+          <p>Quick-fill the search box with live demo accounts that exist right now.</p>
+        </div>
+        <div className="search-chip-row">
+          {suggestedQueries.map((query) => (
+            <button
+              key={query}
+              className="search-chip"
+              onClick={() => handleQuickSearch(query)}
+              type="button"
+            >
+              {query}
+            </button>
+          ))}
+        </div>
+      </section>
+
       {pageInfo ? (
         <section className="search-results-section">
           <div className="profile-section-heading">
             <h3>Results for "{pageInfo.query}"</h3>
-            <p>
-              Showing safe public search cards only. Private email and password
-              data stay on the server.
-            </p>
+            <p>Showing public profile details only.</p>
           </div>
 
           {results.length === 0 ? (
@@ -216,12 +260,44 @@ export function SearchPage() {
           ) : null}
         </section>
       ) : (
-        <section className="profile-empty-state">
-          <h4>Start with a small search query.</h4>
-          <p>
-            This slice uses the real backend search endpoint, so submit a query
-            to see paginated user cards instead of placeholder UI.
-          </p>
+        <section className="search-results-section">
+          <div className="profile-section-heading">
+            <h3>Quick discovery</h3>
+            <p>Start from a few seeded accounts before exploring wider search terms.</p>
+          </div>
+          <div className="search-results-grid search-discovery-grid">
+            {featuredSearches.map((entry) => (
+              <article className="search-result-card search-discovery-card" key={entry.username}>
+                <div className="search-result-header">
+                  <div
+                    aria-hidden="true"
+                    className="search-result-avatar search-result-avatar-fallback"
+                  >
+                    {getAvatarLabel({
+                      avatarUrl: null,
+                      bio: null,
+                      displayName: entry.label,
+                      id: entry.username,
+                      username: entry.username
+                    })}
+                  </div>
+                  <div className="search-card-copy">
+                    <p className="search-card-kicker">@{entry.username}</p>
+                    <h4>{entry.label}</h4>
+                    <p className="search-result-bio">{entry.description}</p>
+                  </div>
+                </div>
+
+                <button
+                  className="secondary-button search-card-action"
+                  onClick={() => handleQuickSearch(entry.query)}
+                  type="button"
+                >
+                  Search {entry.query}
+                </button>
+              </article>
+            ))}
+          </div>
         </section>
       )}
     </section>

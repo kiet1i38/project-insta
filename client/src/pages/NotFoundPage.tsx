@@ -5,9 +5,9 @@ export function NotFoundPage() {
     <section className="panel">
       <p className="eyebrow">404</p>
       <h2>Page not found</h2>
-      <p>The requested route is not part of the current skeleton yet.</p>
+      <p>This page is not available in the current workspace.</p>
       <Link className="button-link" to="/">
-        Back to the feed shell
+        Back to the feed
       </Link>
     </section>
   );

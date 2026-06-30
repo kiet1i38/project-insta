@@ -66,14 +66,12 @@ describe("App", () => {
     render(<App />);
 
     expect(
-      screen.getByRole("heading", { name: /build your original social app/i })
-    ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /register/i })).toBeInTheDocument();
-    expect(
       await screen.findByRole("heading", {
         name: /log back into your photo-sharing workspace/i
       })
     ).toBeInTheDocument();
+    expect(screen.getByText(/cloneinsta/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /create an account/i })).toBeInTheDocument();
     expect(await screen.findByRole("status")).toHaveTextContent(
       /log in to continue\./i
     );

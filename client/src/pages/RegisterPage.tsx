@@ -71,57 +71,64 @@ export function RegisterPage() {
   return (
     <section className="panel auth-page">
       <div className="auth-copy">
-        <p className="eyebrow">Slice 4C</p>
+        <p className="auth-kicker">Create your account</p>
         <h2>Create your CloneInsta account</h2>
         <p>
-          This register screen now posts to the real backend contract and then
-          sends the new user to the protected-login flow with their identifier
-          prefilled.
+          Set up a profile, choose a handle, and get ready to share your first
+          posts.
         </p>
       </div>
 
       <form className="auth-form" noValidate onSubmit={handleSubmit}>
-        <label className="form-field" htmlFor="register-display-name">
-          <span>Display name</span>
-          <input
-            id="register-display-name"
-            name="displayName"
-            type="text"
-            autoComplete="name"
-            value={values.displayName}
-            onChange={(event) => updateField("displayName", event.target.value)}
-            aria-invalid={errors.displayName ? "true" : "false"}
-            aria-describedby={
-              errors.displayName ? "register-display-name-error" : undefined
-            }
-          />
-          {errors.displayName ? (
-            <small className="field-error" id="register-display-name-error">
-              {errors.displayName}
-            </small>
-          ) : null}
-        </label>
+        <div className="auth-form-grid">
+          <label className="form-field" htmlFor="register-display-name">
+            <span>Display name</span>
+            <input
+              id="register-display-name"
+              name="displayName"
+              type="text"
+              autoComplete="name"
+              placeholder="How people should see you"
+              value={values.displayName}
+              onChange={(event) => updateField("displayName", event.target.value)}
+              aria-invalid={errors.displayName ? "true" : "false"}
+              aria-describedby={
+                errors.displayName ? "register-display-name-error" : undefined
+              }
+            />
+            {errors.displayName ? (
+              <small className="field-error" id="register-display-name-error">
+                {errors.displayName}
+              </small>
+            ) : null}
+          </label>
 
-        <label className="form-field" htmlFor="register-username">
-          <span>Username</span>
-          <input
-            id="register-username"
-            name="username"
-            type="text"
-            autoComplete="username"
-            value={values.username}
-            onChange={(event) => updateField("username", event.target.value)}
-            aria-invalid={errors.username ? "true" : "false"}
-            aria-describedby={
-              errors.username ? "register-username-error" : undefined
-            }
-          />
-          {errors.username ? (
-            <small className="field-error" id="register-username-error">
-              {errors.username}
-            </small>
-          ) : null}
-        </label>
+          <label className="form-field" htmlFor="register-username">
+            <span className="form-field-heading">
+              <span>Username</span>
+              <span className="field-inline-hint">lowercase only</span>
+            </span>
+            <input
+              aria-label="Username"
+              id="register-username"
+              name="username"
+              type="text"
+              autoComplete="username"
+              placeholder="your_handle"
+              value={values.username}
+              onChange={(event) => updateField("username", event.target.value)}
+              aria-invalid={errors.username ? "true" : "false"}
+              aria-describedby={
+                errors.username ? "register-username-error" : undefined
+              }
+            />
+            {errors.username ? (
+              <small className="field-error" id="register-username-error">
+                {errors.username}
+              </small>
+            ) : null}
+          </label>
+        </div>
 
         <label className="form-field" htmlFor="register-email">
           <span>Email</span>
@@ -130,6 +137,7 @@ export function RegisterPage() {
             name="email"
             type="email"
             autoComplete="email"
+            placeholder="name@example.com"
             value={values.email}
             onChange={(event) => updateField("email", event.target.value)}
             aria-invalid={errors.email ? "true" : "false"}
@@ -151,6 +159,7 @@ export function RegisterPage() {
             name="password"
             type="password"
             autoComplete="new-password"
+            placeholder="Create a strong password"
             value={values.password}
             onChange={(event) => updateField("password", event.target.value)}
             aria-invalid={errors.password ? "true" : "false"}
@@ -172,6 +181,7 @@ export function RegisterPage() {
             name="confirmPassword"
             type="password"
             autoComplete="new-password"
+            placeholder="Type the same password again"
             value={values.confirmPassword}
             onChange={(event) =>
               updateField("confirmPassword", event.target.value)
