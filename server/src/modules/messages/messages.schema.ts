@@ -98,6 +98,23 @@ export const markConversationReadSchema = z.object({
   messageId: z.string().uuid("messageId must be a valid UUID.")
 });
 
+export const realtimeListConversationsSchema = listConversationsQuerySchema;
+
+export const realtimeListConversationMessagesSchema =
+  listConversationMessagesQuerySchema.extend({
+    conversationId: z.string().uuid("conversationId must be a valid UUID.")
+  });
+
+export const realtimeCreateConversationMessageSchema =
+  createConversationMessageSchema.extend({
+    clientMessageId: z.string().uuid("clientMessageId must be a valid UUID."),
+    conversationId: z.string().uuid("conversationId must be a valid UUID.")
+  });
+
+export const realtimeMarkConversationReadSchema = markConversationReadSchema.extend({
+  conversationId: z.string().uuid("conversationId must be a valid UUID.")
+});
+
 export type CreateDirectConversationInput = z.infer<
   typeof createDirectConversationSchema
 >;
@@ -117,4 +134,16 @@ export type ListConversationMessagesQueryInput = z.infer<
 >;
 export type MarkConversationReadInput = z.infer<
   typeof markConversationReadSchema
+>;
+export type RealtimeListConversationsInput = z.infer<
+  typeof realtimeListConversationsSchema
+>;
+export type RealtimeListConversationMessagesInput = z.infer<
+  typeof realtimeListConversationMessagesSchema
+>;
+export type RealtimeCreateConversationMessageInput = z.infer<
+  typeof realtimeCreateConversationMessageSchema
+>;
+export type RealtimeMarkConversationReadInput = z.infer<
+  typeof realtimeMarkConversationReadSchema
 >;

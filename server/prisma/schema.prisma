@@ -103,6 +103,7 @@ model Message {
   id             String                  @id @default(uuid()) @db.Uuid
   conversationId String                  @db.Uuid
   senderId       String                  @db.Uuid
+  clientMessageId String?                @db.Uuid
   content        String                  @db.VarChar(2000)
   createdAt      DateTime                @default(now())
   conversation   Conversation            @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -111,6 +112,7 @@ model Message {
 
   @@index([conversationId, createdAt])
   @@index([senderId, createdAt])
+  @@unique([conversationId, senderId, clientMessageId])
 }
 
 model ConversationReadState {

@@ -52,6 +52,7 @@ export type ConversationSummaryRecord = Prisma.ConversationGetPayload<{
 }>;
 
 const threadMessageSelect = {
+  clientMessageId: true,
   content: true,
   conversationId: true,
   createdAt: true,
@@ -202,6 +203,19 @@ export async function createDirectConversationRecord(input: {
   });
 }
 
+export async function findConversationRoomIdsForUser(userId: string): Promise<string[]> {
+  const conversationParticipants = await prisma.conversationParticipant.findMany({
+    select: {
+      conversationId: true
+    },
+    where: {
+      userId
+    }
+  });
+
+  return conversationParticipants.map((participant) => participant.conversationId);
+}
+
 export async function findConversationSummariesForUser(input: {
   cursor?: ConversationCursor;
   limit: number;
@@ -302,19 +316,65 @@ export async function findConversationMessageByIdForUser(input: {
 }
 
 export async function createConversationMessageRecord(input: {
+  clientMessageId?: string;
   content: string;
   conversationId: string;
   senderId: string;
-}): Promise<ThreadMessageRecord> {
+}): Promise<{ created: boolean; message: ThreadMessageRecord }> {
   return prisma.$transaction(async (tx) => {
-    const message = await tx.message.create({
-      data: {
-        content: input.content,
-        conversationId: input.conversationId,
-        senderId: input.senderId
-      },
-      select: threadMessageSelect
-    });
+    if (input.clientMessageId) {
+      const existingMessage = await tx.message.findFirst({
+        select: threadMessageSelect,
+        where: {
+          clientMessageId: input.clientMessageId,
+          conversationId: input.conversationId,
+          senderId: input.senderId
+        }
+      });
+
+      if (existingMessage) {
+        return {
+          created: false,
+          message: existingMessage
+        };
+      }
+    }
+
+    let message: ThreadMessageRecord;
+
+    try {
+      message = await tx.message.create({
+        data: {
+          clientMessageId: input.clientMessageId,
+          content: input.content,
+          conversationId: input.conversationId,
+          senderId: input.senderId
+        },
+        select: threadMessageSelect
+      });
+    } catch (error) {
+      if (!input.clientMessageId || !isMessageClientKeyUniqueConflict(error)) {
+        throw error;
+      }
+
+      const existingMessage = await tx.message.findFirst({
+        select: threadMessageSelect,
+        where: {
+          clientMessageId: input.clientMessageId,
+          conversationId: input.conversationId,
+          senderId: input.senderId
+        }
+      });
+
+      if (!existingMessage) {
+        throw error;
+      }
+
+      return {
+        created: false,
+        message: existingMessage
+      };
+    }
 
     await tx.conversation.update({
       data: {
@@ -344,7 +404,10 @@ export async function createConversationMessageRecord(input: {
       }
     });
 
-    return message;
+    return {
+      created: true,
+      message
+    };
   });
 }
 
@@ -380,5 +443,16 @@ export function isConversationDirectKeyUniqueConflict(error: unknown): boolean {
     error.code === "P2002" &&
     (error.meta?.modelName === "Conversation" ||
       (Array.isArray(error.meta?.target) && error.meta.target.includes("directKey")))
+  );
+}
+
+export function isMessageClientKeyUniqueConflict(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002" &&
+    Array.isArray(error.meta?.target) &&
+    error.meta.target.includes("conversationId") &&
+    error.meta.target.includes("senderId") &&
+    error.meta.target.includes("clientMessageId")
   );
 }

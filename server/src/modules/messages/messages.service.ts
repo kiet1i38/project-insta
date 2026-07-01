@@ -12,6 +12,7 @@ import {
   findActiveConversationPeerById,
   findConversationMessageByIdForUser,
   findConversationMessagesForUser,
+  findConversationRoomIdsForUser,
   findConversationSummariesForUser,
   findConversationSummaryByDirectKeyForUser,
   findConversationSummaryByIdForUser,
@@ -21,21 +22,21 @@ import {
   upsertConversationReadState
 } from "./messages.repository.js";
 
-type ConversationPeerDto = {
+export type ConversationPeerDto = {
   avatarUrl: string | null;
   displayName: string | null;
   id: string;
   username: string;
 };
 
-type ConversationMessagePreviewDto = {
+export type ConversationMessagePreviewDto = {
   content: string;
   createdAt: Date;
   id: string;
   senderId: string;
 };
 
-type ConversationSummaryDto = {
+export type ConversationSummaryDto = {
   id: string;
   lastMessage: ConversationMessagePreviewDto | null;
   peer: ConversationPeerDto;
@@ -43,7 +44,7 @@ type ConversationSummaryDto = {
   updatedAt: Date;
 };
 
-type ConversationPageDto = {
+export type ConversationPageDto = {
   conversations: ConversationSummaryDto[];
   pageInfo: {
     hasNextPage: boolean;
@@ -52,7 +53,7 @@ type ConversationPageDto = {
   };
 };
 
-type ConversationMessageDto = {
+export type ConversationMessageDto = {
   content: string;
   conversationId: string;
   createdAt: Date;
@@ -60,7 +61,7 @@ type ConversationMessageDto = {
   sender: ConversationPeerDto;
 };
 
-type ConversationThreadDto = {
+export type ConversationThreadDto = {
   conversation: {
     id: string;
     peer: ConversationPeerDto;
@@ -78,7 +79,7 @@ type ConversationThreadDto = {
   };
 };
 
-type ConversationReadStateDto = {
+export type ConversationReadStateDto = {
   conversationId: string;
   lastReadAt: Date | null;
   lastReadMessageId: string | null;
@@ -189,6 +190,72 @@ async function toConversationSummaryDto(
   };
 }
 
+async function getConversationSummaryRecordOrThrow(input: {
+  conversationId: string;
+  viewerId: string;
+}): Promise<ConversationSummaryRecord> {
+  const conversation = await findConversationSummaryByIdForUser({
+    conversationId: input.conversationId,
+    viewerId: input.viewerId
+  });
+
+  if (!conversation) {
+    throw createConversationNotFoundError();
+  }
+
+  return conversation;
+}
+
+function toConversationReadStateDto(
+  conversationId: string,
+  input: {
+    lastReadAt: Date | null;
+    lastReadMessageId: string | null;
+  }
+): ConversationReadStateDto {
+  return {
+    conversationId,
+    lastReadAt: input.lastReadAt,
+    lastReadMessageId: input.lastReadMessageId
+  };
+}
+
+async function buildConversationThreadDto(input: {
+  conversation: ConversationSummaryRecord;
+  query: ListConversationMessagesQueryInput;
+  viewerId: string;
+}): Promise<ConversationThreadDto> {
+  const fetchedMessages = await findConversationMessagesForUser({
+    conversationId: input.conversation.id,
+    cursor: input.query.cursor,
+    limit: input.query.limit,
+    viewerId: input.viewerId
+  });
+  const hasNextPage = fetchedMessages.length > input.query.limit;
+  const visibleMessages = hasNextPage
+    ? fetchedMessages.slice(0, input.query.limit)
+    : fetchedMessages;
+  const lastVisibleMessage = visibleMessages.at(-1) ?? null;
+  const viewerReadState = input.conversation.readStates[0] ?? null;
+
+  return {
+    conversation: {
+      id: input.conversation.id,
+      peer: getConversationPeerOrThrow(input.conversation.participants, input.viewerId)
+    },
+    messages: visibleMessages.map(toConversationMessageDto),
+    pageInfo: {
+      hasNextPage,
+      limit: input.query.limit,
+      nextCursor: hasNextPage && lastVisibleMessage ? encodeMessageCursor(lastVisibleMessage) : null
+    },
+    readState: toConversationReadStateDto(input.conversation.id, {
+      lastReadAt: viewerReadState?.lastReadAt ?? null,
+      lastReadMessageId: viewerReadState?.lastReadMessageId ?? null
+    })
+  };
+}
+
 export async function createDirectConversation(input: {
   participantUserId: string;
   viewerId: string;
@@ -284,45 +351,16 @@ export async function getConversationMessages(input: {
   query: ListConversationMessagesQueryInput;
   viewerId: string;
 }): Promise<ConversationThreadDto> {
-  const conversation = await findConversationSummaryByIdForUser({
+  const conversation = await getConversationSummaryRecordOrThrow({
     conversationId: input.conversationId,
     viewerId: input.viewerId
   });
 
-  if (!conversation) {
-    throw createConversationNotFoundError();
-  }
-
-  const fetchedMessages = await findConversationMessagesForUser({
-    conversationId: input.conversationId,
-    cursor: input.query.cursor,
-    limit: input.query.limit,
+  return buildConversationThreadDto({
+    conversation,
+    query: input.query,
     viewerId: input.viewerId
   });
-  const hasNextPage = fetchedMessages.length > input.query.limit;
-  const visibleMessages = hasNextPage
-    ? fetchedMessages.slice(0, input.query.limit)
-    : fetchedMessages;
-  const lastVisibleMessage = visibleMessages.at(-1) ?? null;
-  const viewerReadState = conversation.readStates[0] ?? null;
-
-  return {
-    conversation: {
-      id: conversation.id,
-      peer: getConversationPeerOrThrow(conversation.participants, input.viewerId)
-    },
-    messages: visibleMessages.map(toConversationMessageDto),
-    pageInfo: {
-      hasNextPage,
-      limit: input.query.limit,
-      nextCursor: hasNextPage && lastVisibleMessage ? encodeMessageCursor(lastVisibleMessage) : null
-    },
-    readState: {
-      conversationId: conversation.id,
-      lastReadAt: viewerReadState?.lastReadAt ?? null,
-      lastReadMessageId: viewerReadState?.lastReadMessageId ?? null
-    }
-  };
 }
 
 export async function createConversationMessage(input: {
@@ -330,14 +368,10 @@ export async function createConversationMessage(input: {
   conversationId: string;
   viewerId: string;
 }): Promise<ConversationMessageDto> {
-  const conversation = await findConversationSummaryByIdForUser({
+  await getConversationSummaryRecordOrThrow({
     conversationId: input.conversationId,
     viewerId: input.viewerId
   });
-
-  if (!conversation) {
-    throw createConversationNotFoundError();
-  }
 
   const createdMessage = await createConversationMessageRecord({
     content: input.body.content,
@@ -345,7 +379,34 @@ export async function createConversationMessage(input: {
     senderId: input.viewerId
   });
 
-  return toConversationMessageDto(createdMessage);
+  return toConversationMessageDto(createdMessage.message);
+}
+
+export async function createConversationMessageRealtime(input: {
+  body: CreateConversationMessageInput & { clientMessageId: string };
+  conversationId: string;
+  viewerId: string;
+}): Promise<{
+  created: boolean;
+  message: ConversationMessageDto;
+  participantUserIds: string[];
+}> {
+  const conversation = await getConversationSummaryRecordOrThrow({
+    conversationId: input.conversationId,
+    viewerId: input.viewerId
+  });
+  const createdMessage = await createConversationMessageRecord({
+    clientMessageId: input.body.clientMessageId,
+    content: input.body.content,
+    conversationId: input.conversationId,
+    senderId: input.viewerId
+  });
+
+  return {
+    created: createdMessage.created,
+    message: toConversationMessageDto(createdMessage.message),
+    participantUserIds: conversation.participants.map((participant) => participant.userId)
+  };
 }
 
 export async function markConversationRead(input: {
@@ -353,14 +414,10 @@ export async function markConversationRead(input: {
   conversationId: string;
   viewerId: string;
 }): Promise<ConversationReadStateDto> {
-  const conversation = await findConversationSummaryByIdForUser({
+  const conversation = await getConversationSummaryRecordOrThrow({
     conversationId: input.conversationId,
     viewerId: input.viewerId
   });
-
-  if (!conversation) {
-    throw createConversationNotFoundError();
-  }
 
   const targetMessage = await findConversationMessageByIdForUser({
     conversationId: input.conversationId,
@@ -378,11 +435,10 @@ export async function markConversationRead(input: {
     currentReadState?.lastReadAt &&
     targetMessage.createdAt <= currentReadState.lastReadAt
   ) {
-    return {
-      conversationId: input.conversationId,
+    return toConversationReadStateDto(input.conversationId, {
       lastReadAt: currentReadState.lastReadAt,
       lastReadMessageId: currentReadState.lastReadMessageId
-    };
+    });
   }
 
   const updatedReadState = await upsertConversationReadState({
@@ -392,9 +448,43 @@ export async function markConversationRead(input: {
     userId: input.viewerId
   });
 
-  return {
-    conversationId: updatedReadState.conversationId,
+  return toConversationReadStateDto(updatedReadState.conversationId, {
     lastReadAt: updatedReadState.lastReadAt,
     lastReadMessageId: updatedReadState.lastReadMessageId
+  });
+}
+
+export async function markConversationReadRealtime(input: {
+  body: MarkConversationReadInput;
+  conversationId: string;
+  viewerId: string;
+}): Promise<{
+  participantUserIds: string[];
+  readState: ConversationReadStateDto;
+}> {
+  const conversation = await getConversationSummaryRecordOrThrow({
+    conversationId: input.conversationId,
+    viewerId: input.viewerId
+  });
+  const readState = await markConversationRead(input);
+
+  return {
+    participantUserIds: conversation.participants.map((participant) => participant.userId),
+    readState
   };
+}
+
+export async function getConversationSummary(input: {
+  conversationId: string;
+  viewerId: string;
+}): Promise<ConversationSummaryDto> {
+  const conversation = await getConversationSummaryRecordOrThrow(input);
+
+  return toConversationSummaryDto(conversation, input.viewerId);
+}
+
+export async function listConversationRoomIds(input: {
+  viewerId: string;
+}): Promise<string[]> {
+  return findConversationRoomIdsForUser(input.viewerId);
 }

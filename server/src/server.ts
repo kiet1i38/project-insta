@@ -1,11 +1,16 @@
+import { createServer } from "node:http";
 import { app } from "./app.js";
 import { env } from "./config/env.js";
 import { ensureLocalUploadDirectory } from "./modules/posts/upload.service.js";
+import { createSocketServer } from "./realtime/socketServer.js";
 
 async function startServer() {
   await ensureLocalUploadDirectory();
+  const httpServer = createServer(app);
 
-  app.listen(env.PORT, () => {
+  createSocketServer(httpServer);
+
+  httpServer.listen(env.PORT, () => {
     console.log(
       `CloneInsta server listening on http://localhost:${env.PORT} (${env.NODE_ENV})`
     );

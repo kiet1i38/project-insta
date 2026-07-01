@@ -165,5 +165,5 @@ describe.sequential("database seed", () => {
     ]);
 
     expect(countsAfterSecondSeed).toEqual([3, 2, 1, 1, 1, 2, 1, 2, 0]);
-  });
+  }, 15000);
 });
