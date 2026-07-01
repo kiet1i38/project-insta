@@ -6,10 +6,12 @@ import {
   createPostLike,
   createPostRecord,
   deletePostLike,
+  findVisiblePostDetailById,
   findFeedPostsForViewer,
   findActivePostById,
   findVisiblePostsByAuthorId,
   type FeedPostRecord,
+  type PostDetailRecord,
   softDeletePostById
 } from "./posts.repository.js";
 import type { FeedCursor } from "./posts.schema.js";
@@ -70,6 +72,32 @@ type PostLikeStateDto = {
   viewerHasLiked: boolean;
 };
 
+type PostDetailDto = {
+  author: {
+    avatarUrl: string | null;
+    displayName: string | null;
+    id: string;
+    username: string;
+  };
+  caption: string | null;
+  comments: Array<{
+    author: {
+      avatarUrl: string | null;
+      displayName: string | null;
+      id: string;
+      username: string;
+    };
+    content: string;
+    createdAt: Date;
+    id: string;
+    updatedAt: Date;
+  }>;
+  createdAt: Date;
+  id: string;
+  imageUrl: string;
+  updatedAt: Date;
+};
+
 type PostDto = {
   authorId: string;
   caption: string | null;
@@ -106,6 +134,34 @@ function toFeedPostDto(post: FeedPostRecord): FeedPostDto {
       username: post.author.username
     },
     caption: post.caption,
+    createdAt: post.createdAt,
+    id: post.id,
+    imageUrl: post.imageUrl,
+    updatedAt: post.updatedAt
+  };
+}
+
+function toPostDetailDto(post: PostDetailRecord): PostDetailDto {
+  return {
+    author: {
+      avatarUrl: post.author.avatarUrl,
+      displayName: post.author.displayName,
+      id: post.author.id,
+      username: post.author.username
+    },
+    caption: post.caption,
+    comments: post.comments.map((comment) => ({
+      author: {
+        avatarUrl: comment.author.avatarUrl,
+        displayName: comment.author.displayName,
+        id: comment.author.id,
+        username: comment.author.username
+      },
+      content: comment.content,
+      createdAt: comment.createdAt,
+      id: comment.id,
+      updatedAt: comment.updatedAt
+    })),
     createdAt: post.createdAt,
     id: post.id,
     imageUrl: post.imageUrl,
@@ -157,6 +213,16 @@ export async function getOwnVisiblePosts(userId: string): Promise<PostDto[]> {
   const posts = await findVisiblePostsByAuthorId(userId);
 
   return posts.map(toPostDto);
+}
+
+export async function getPostDetail(postId: string): Promise<PostDetailDto> {
+  const post = await findVisiblePostDetailById(postId);
+
+  if (!post) {
+    throw createPostNotFoundError();
+  }
+
+  return toPostDetailDto(post);
 }
 
 export async function getFeed(input: GetFeedInput): Promise<FeedPostsDto> {

@@ -111,6 +111,36 @@ export type FeedPostsResponse = {
   requestId: string;
 };
 
+export type PostDetailCommentAuthor = {
+  avatarUrl: string | null;
+  displayName: string | null;
+  id: string;
+  username: string;
+};
+
+export type PostDetailComment = {
+  author: PostDetailCommentAuthor;
+  content: string;
+  createdAt: string;
+  id: string;
+  updatedAt: string;
+};
+
+export type PostDetail = {
+  author: FeedPostAuthor;
+  caption: string | null;
+  comments: PostDetailComment[];
+  createdAt: string;
+  id: string;
+  imageUrl: string;
+  updatedAt: string;
+};
+
+export type PostDetailResponse = {
+  post: PostDetail;
+  requestId: string;
+};
+
 export type FeedComment = {
   authorId: string;
   content: string;
@@ -242,6 +272,41 @@ export type GetModerationReportsInput = {
 
 export type ModerationActionInput = {
   note?: string;
+};
+
+export const reportReasonValues = [
+  "SPAM",
+  "HARASSMENT",
+  "HATE_SPEECH",
+  "VIOLENCE",
+  "NUDITY",
+  "SELF_HARM",
+  "IMPERSONATION",
+  "MISINFORMATION",
+  "OTHER"
+] as const;
+
+export type ReportReason = (typeof reportReasonValues)[number];
+
+export type CreateReportInput = {
+  reason: ReportReason;
+  reportedCommentId?: string | null;
+  reportedPostId?: string | null;
+  reportedUserId?: string | null;
+};
+
+export type CreateReportResponse = {
+  report: {
+    createdAt: string;
+    id: string;
+    reason: ReportReason;
+    reportedCommentId: string | null;
+    reportedPostId: string | null;
+    reportedUserId: string | null;
+    reporterId: string;
+    status: "DISMISSED" | "PENDING" | "RESOLVED";
+  };
+  requestId: string;
 };
 
 export type AuditLogActor = {
@@ -577,6 +642,18 @@ export async function getFeedPosts(
   });
 }
 
+export async function getPostDetail(
+  postId: string
+): Promise<PostDetailResponse> {
+  return requestJson<PostDetailResponse>(
+    `/posts/${encodeURIComponent(postId)}`,
+    {
+      includeAccessToken: true,
+      method: "GET"
+    }
+  );
+}
+
 export async function likePost(
   postId: string
 ): Promise<PostLikeStateResponse> {
@@ -693,6 +770,16 @@ export async function searchUsers(
   return requestJson<SearchUsersResponse>(`/users/search?${params.toString()}`, {
     includeAccessToken: true,
     method: "GET"
+  });
+}
+
+export async function createReport(
+  input: CreateReportInput
+): Promise<CreateReportResponse> {
+  return requestJson<CreateReportResponse>("/reports", {
+    body: input,
+    includeAccessToken: true,
+    method: "POST"
   });
 }
 

@@ -18,8 +18,49 @@ const feedPostSelect = {
   updatedAt: true
 } satisfies Prisma.PostSelect;
 
+const postDetailSelect = {
+  author: {
+    select: {
+      avatarUrl: true,
+      displayName: true,
+      id: true,
+      username: true
+    }
+  },
+  caption: true,
+  comments: {
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: {
+      author: {
+        select: {
+          avatarUrl: true,
+          displayName: true,
+          id: true,
+          username: true
+        }
+      },
+      content: true,
+      createdAt: true,
+      id: true,
+      updatedAt: true
+    },
+    where: {
+      deletedAt: null,
+      isHidden: false
+    }
+  },
+  createdAt: true,
+  id: true,
+  imageUrl: true,
+  updatedAt: true
+} satisfies Prisma.PostSelect;
+
 export type FeedPostRecord = Prisma.PostGetPayload<{
   select: typeof feedPostSelect;
+}>;
+
+export type PostDetailRecord = Prisma.PostGetPayload<{
+  select: typeof postDetailSelect;
 }>;
 
 export async function createPostRecord(input: {
@@ -102,6 +143,19 @@ export async function findFeedPostsForViewer(input: {
         },
         ...(paginationFilter ? [paginationFilter] : [])
       ]
+    }
+  });
+}
+
+export async function findVisiblePostDetailById(
+  postId: string
+): Promise<PostDetailRecord | null> {
+  return prisma.post.findFirst({
+    select: postDetailSelect,
+    where: {
+      deletedAt: null,
+      id: postId,
+      isHidden: false
     }
   });
 }

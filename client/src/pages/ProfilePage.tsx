@@ -319,6 +319,12 @@ export function ProfilePage() {
                   src={post.imageUrl}
                 />
                 <div className="profile-post-content">
+                  <Link
+                    className="button-link-inline secondary-inline-link"
+                    to={`/posts/${post.id}`}
+                  >
+                    View details
+                  </Link>
                   <p className="profile-post-caption">
                     {post.caption ?? "Untitled post"}
                   </p>

@@ -9,6 +9,7 @@ import {
   createPostController,
   deletePostController,
   getFeedController,
+  getPostDetailController,
   getOwnPostsController,
   likePostController,
   unlikePostController
@@ -27,6 +28,7 @@ postsRouter.options("/", handleAuthCorsPreflight);
 postsRouter.options("/:postId", handleAuthCorsPreflight);
 postsRouter.get("/feed", requireAuth, getFeedController);
 postsRouter.get("/me", requireAuth, getOwnPostsController);
+postsRouter.get("/:postId", requireAuth, getPostDetailController);
 postsRouter.post("/:postId/likes", requireAuth, likePostController);
 postsRouter.delete("/:postId/likes", requireAuth, unlikePostController);
 postsRouter.delete("/:postId", requireAuth, deletePostController);

@@ -9,6 +9,7 @@ import {
   createPost,
   deletePost,
   getFeed,
+  getPostDetail,
   getOwnVisiblePosts,
   likePost,
   unlikePost
@@ -131,6 +132,37 @@ function parsePostRouteParams(rawPostId: string | string[] | undefined) {
 
   return postRouteParamsSchema.safeParse({ postId });
 }
+
+export const getPostDetailController: RequestHandler = async (req, res, next) => {
+  const parsedParams = parsePostRouteParams(req.params.postId);
+
+  if (!parsedParams.success) {
+    res.status(400).json({
+      error: {
+        code: "VALIDATION_ERROR",
+        details: toValidationDetails(parsedParams.error.issues),
+        message: "Invalid route parameters."
+      },
+      requestId: req.requestId
+    });
+    return;
+  }
+
+  try {
+    if (!req.authUser) {
+      throw createUnauthorizedError();
+    }
+
+    const post = await getPostDetail(parsedParams.data.postId);
+
+    res.status(200).json({
+      post,
+      requestId: req.requestId
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 export const likePostController: RequestHandler = async (req, res, next) => {
   const parsedParams = parsePostRouteParams(req.params.postId);

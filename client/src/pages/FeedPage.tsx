@@ -425,6 +425,12 @@ export function FeedPage() {
 
                     <div className="feed-card-content">
                       <div className="feed-post-copy">
+                        <Link
+                          className="feed-post-detail-link"
+                          to={`/posts/${post.id}`}
+                        >
+                          View details
+                        </Link>
                         <p className="feed-post-caption">
                           {post.caption ?? "Untitled post"}
                         </p>

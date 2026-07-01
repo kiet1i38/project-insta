@@ -8,6 +8,7 @@ import { FeedPage } from "../pages/FeedPage";
 import { LoginPage } from "../pages/LoginPage";
 import { ModerationQueuePage } from "../pages/ModerationQueuePage";
 import { NotFoundPage } from "../pages/NotFoundPage";
+import { PostDetailPage } from "../pages/PostDetailPage";
 import { ProfilePage } from "../pages/ProfilePage";
 import { RegisterPage } from "../pages/RegisterPage";
 import { SearchPage } from "../pages/SearchPage";
@@ -21,6 +22,7 @@ export function AppRoutes() {
         <Route element={<ProtectedRoute />}>
           <Route element={<FeedPage />} index />
           <Route element={<CreatePostPage />} path="create" />
+          <Route element={<PostDetailPage />} path="posts/:postId" />
           <Route element={<ProfilePage />} path="profile" />
           <Route element={<EditProfilePage />} path="profile/edit" />
           <Route element={<SearchPage />} path="search" />

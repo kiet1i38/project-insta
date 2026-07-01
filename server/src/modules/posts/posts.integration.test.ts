@@ -75,6 +75,24 @@ async function createPostFixture(overrides: {
   return createdPost.id;
 }
 
+async function createCommentFixture(overrides: {
+  authorId: string;
+  content?: string;
+  deletedAt?: Date | null;
+  isHidden?: boolean;
+  postId: string;
+}) {
+  return prisma.comment.create({
+    data: {
+      authorId: overrides.authorId,
+      content: overrides.content ?? "Existing comment",
+      deletedAt: overrides.deletedAt ?? null,
+      isHidden: overrides.isHidden ?? false,
+      postId: overrides.postId
+    }
+  });
+}
+
 async function resetUploadFiles() {
   await ensureLocalUploadDirectory(uploadDirectory);
   const uploadEntries = await readdir(uploadDirectory, { withFileTypes: true });
@@ -383,6 +401,119 @@ describe("posts API", () => {
         path: "limit"
       }
     ]);
+  });
+
+  test("GET /api/v1/posts/:postId returns a visible post detail with visible comments only", async () => {
+    const viewer = await createUserFixture({
+      email: "post-detail-viewer@example.com",
+      username: "post_detail_viewer"
+    });
+    const author = await createUserFixture({
+      avatarUrl: "https://cdn.example.com/author.png",
+      displayName: "Author Detail",
+      email: "post-detail-author@example.com",
+      username: "post_detail_author"
+    });
+    const firstCommentAuthor = await createUserFixture({
+      avatarUrl: "https://cdn.example.com/commenter-1.png",
+      displayName: "Commenter One",
+      email: "post-detail-commenter-1@example.com",
+      username: "post_detail_commenter_one"
+    });
+    const secondCommentAuthor = await createUserFixture({
+      avatarUrl: "https://cdn.example.com/commenter-2.png",
+      displayName: "Commenter Two",
+      email: "post-detail-commenter-2@example.com",
+      username: "post_detail_commenter_two"
+    });
+    const hiddenCommentAuthor = await createUserFixture({
+      email: "post-detail-hidden-commenter@example.com",
+      username: "post_detail_hidden_commenter"
+    });
+    const accessToken = await loginAndGetAccessToken(
+      viewer.user.email,
+      viewer.password
+    );
+    const postId = await createPostFixture({
+      authorId: author.user.id,
+      caption: "Post detail target",
+      createdAt: new Date("2026-06-30T10:00:00.000Z"),
+      imageUrl: "https://cdn.example.com/posts/post-detail-target.png"
+    });
+    const olderComment = await createCommentFixture({
+      authorId: firstCommentAuthor.user.id,
+      content: "Older visible comment",
+      postId
+    });
+    const newerComment = await createCommentFixture({
+      authorId: secondCommentAuthor.user.id,
+      content: "Newer visible comment",
+      postId
+    });
+
+    await createCommentFixture({
+      authorId: hiddenCommentAuthor.user.id,
+      content: "Hidden comment",
+      isHidden: true,
+      postId
+    });
+    await createCommentFixture({
+      authorId: hiddenCommentAuthor.user.id,
+      content: "Deleted comment",
+      deletedAt: new Date("2026-06-30T10:30:00.000Z"),
+      postId
+    });
+
+    const response = await request(app)
+      .get(`/api/v1/posts/${postId}`)
+      .set("Origin", allowedOrigin)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.requestId).toMatch(/^req_/);
+    expect(response.headers["x-request-id"]).toBe(response.body.requestId);
+    expect(response.headers["access-control-allow-origin"]).toBe(allowedOrigin);
+    expect(response.headers["access-control-allow-credentials"]).toBe("true");
+    expect(response.headers["vary"]).toContain("Origin");
+    expect(response.body.post).toEqual({
+      author: {
+        avatarUrl: author.user.avatarUrl,
+        displayName: author.user.displayName,
+        id: author.user.id,
+        username: author.user.username
+      },
+      caption: "Post detail target",
+      comments: [
+        {
+          author: {
+            avatarUrl: firstCommentAuthor.user.avatarUrl,
+            displayName: firstCommentAuthor.user.displayName,
+            id: firstCommentAuthor.user.id,
+            username: firstCommentAuthor.user.username
+          },
+          content: "Older visible comment",
+          createdAt: expect.any(String),
+          id: olderComment.id,
+          updatedAt: expect.any(String)
+        },
+        {
+          author: {
+            avatarUrl: secondCommentAuthor.user.avatarUrl,
+            displayName: secondCommentAuthor.user.displayName,
+            id: secondCommentAuthor.user.id,
+            username: secondCommentAuthor.user.username
+          },
+          content: "Newer visible comment",
+          createdAt: expect.any(String),
+          id: newerComment.id,
+          updatedAt: expect.any(String)
+        }
+      ],
+      createdAt: "2026-06-30T10:00:00.000Z",
+      id: postId,
+      imageUrl: "https://cdn.example.com/posts/post-detail-target.png",
+      updatedAt: expect.any(String)
+    });
   });
 
   test("POST /api/v1/posts/:postId/likes creates one like row even when duplicate requests race", async () => {
