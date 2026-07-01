@@ -5,6 +5,7 @@ import { auditRouter } from "./modules/audit/audit.routes.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { commentsRouter } from "./modules/comments/comments.routes.js";
 import { healthRouter } from "./modules/health/health.routes.js";
+import { messagesRouter } from "./modules/messages/messages.routes.js";
 import { moderationRouter } from "./modules/moderation/moderation.routes.js";
 import { postsRouter } from "./modules/posts/posts.routes.js";
 import { reportsRouter } from "./modules/reports/reports.routes.js";
@@ -26,6 +27,7 @@ app.get("/", (req, res) => {
 app.use("/api/v1", auditRouter);
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1", commentsRouter);
+app.use("/api/v1/conversations", messagesRouter);
 app.use("/api/v1/health", healthRouter);
 app.use("/api/v1", moderationRouter);
 app.use("/api/v1/posts", postsRouter);

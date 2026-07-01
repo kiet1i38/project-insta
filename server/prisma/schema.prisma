@@ -45,6 +45,8 @@ model User {
   updatedAt          DateTime           @updatedAt
   auditLogs          AuditLog[]         @relation("AuditActor")
   comments           Comment[]
+  conversationParticipants ConversationParticipant[]
+  conversationReadStates   ConversationReadState[]
   followers          Follow[]           @relation("UserFollowers")
   following          Follow[]           @relation("UserFollowing")
   likes              Like[]
@@ -53,6 +55,7 @@ model User {
   refreshTokens      RefreshToken[]
   reportsFiled       Report[]           @relation("ReportReporter")
   reportsTargetingMe Report[]           @relation("ReportTargetUser")
+  sentMessages       Message[]
 
   @@index([createdAt])
 }
@@ -71,6 +74,58 @@ model RefreshToken {
   @@index([familyId])
   @@index([userId, familyId])
   @@index([expiresAt])
+}
+
+model Conversation {
+  id           String                  @id @default(uuid()) @db.Uuid
+  directKey    String                  @unique @db.VarChar(73)
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+  messages     Message[]
+  participants ConversationParticipant[]
+  readStates   ConversationReadState[]
+
+  @@index([updatedAt])
+}
+
+model ConversationParticipant {
+  conversationId String       @db.Uuid
+  userId         String       @db.Uuid
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, userId])
+  @@index([userId, createdAt])
+}
+
+model Message {
+  id             String                  @id @default(uuid()) @db.Uuid
+  conversationId String                  @db.Uuid
+  senderId       String                  @db.Uuid
+  content        String                  @db.VarChar(2000)
+  createdAt      DateTime                @default(now())
+  conversation   Conversation            @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User                    @relation(fields: [senderId], references: [id], onDelete: Restrict)
+  readStates     ConversationReadState[] @relation("ConversationLastReadMessage")
+
+  @@index([conversationId, createdAt])
+  @@index([senderId, createdAt])
+}
+
+model ConversationReadState {
+  conversationId    String       @db.Uuid
+  userId            String       @db.Uuid
+  lastReadMessageId String?      @db.Uuid
+  lastReadAt        DateTime?
+  updatedAt         DateTime     @updatedAt
+  conversation      Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  lastReadMessage   Message?     @relation("ConversationLastReadMessage", fields: [lastReadMessageId], references: [id], onDelete: SetNull)
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, userId])
+  @@index([userId, updatedAt])
+  @@index([lastReadMessageId])
 }
 
 model Post {

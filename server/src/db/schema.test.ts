@@ -61,6 +61,10 @@ async function insertPost(authorId: string): Promise<string> {
   return id;
 }
 
+function buildDirectConversationKey(userAId: string, userBId: string): string {
+  return [userAId, userBId].sort().join(":");
+}
+
 describe("core Prisma schema", () => {
   afterAll(async () => {
     await prisma.$disconnect();
@@ -74,10 +78,14 @@ describe("core Prisma schema", () => {
         AND table_name IN (
           'User',
           'RefreshToken',
+          'Conversation',
+          'ConversationParticipant',
+          'ConversationReadState',
           'Post',
           'Comment',
           'Like',
           'Follow',
+          'Message',
           'Report',
           'ModerationAction',
           'AuditLog'
@@ -87,8 +95,12 @@ describe("core Prisma schema", () => {
     expect(tables.map((table) => table.table_name).sort()).toEqual([
       "AuditLog",
       "Comment",
+      "Conversation",
+      "ConversationParticipant",
+      "ConversationReadState",
       "Follow",
       "Like",
+      "Message",
       "ModerationAction",
       "Post",
       "RefreshToken",
@@ -125,8 +137,13 @@ describe("core Prisma schema", () => {
       SELECT indexname, indexdef
       FROM pg_indexes
       WHERE schemaname = 'public'
-        AND tablename IN ('Like', 'Follow')
-        AND indexname IN ('Like_pkey', 'Follow_pkey')
+        AND tablename IN ('Like', 'Follow', 'ConversationParticipant', 'ConversationReadState')
+        AND indexname IN (
+          'Like_pkey',
+          'Follow_pkey',
+          'ConversationParticipant_pkey',
+          'ConversationReadState_pkey'
+        )
     `;
 
     expect(joinPrimaryKeys).toEqual(
@@ -138,6 +155,56 @@ describe("core Prisma schema", () => {
         expect.objectContaining({
           indexname: "Follow_pkey",
           indexdef: expect.stringContaining(`("followerId", "followingId")`)
+        }),
+        expect.objectContaining({
+          indexname: "ConversationParticipant_pkey",
+          indexdef: expect.stringContaining(`("conversationId", "userId")`)
+        }),
+        expect.objectContaining({
+          indexname: "ConversationReadState_pkey",
+          indexdef: expect.stringContaining(`("conversationId", "userId")`)
+        })
+      ])
+    );
+
+    const chatIndexes = await prisma.$queryRaw<
+      Array<{ indexdef: string; indexname: string }>
+    >`
+      SELECT indexname, indexdef
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND (
+          (tablename = 'Conversation' AND indexname IN ('Conversation_directKey_key', 'Conversation_updatedAt_idx'))
+          OR (tablename = 'Message' AND indexname IN ('Message_conversationId_createdAt_idx', 'Message_senderId_createdAt_idx'))
+          OR (tablename = 'ConversationReadState' AND indexname IN ('ConversationReadState_userId_updatedAt_idx', 'ConversationReadState_lastReadMessageId_idx'))
+        )
+    `;
+
+    expect(chatIndexes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          indexname: "Conversation_directKey_key",
+          indexdef: expect.stringContaining(`("directKey")`)
+        }),
+        expect.objectContaining({
+          indexname: "Conversation_updatedAt_idx",
+          indexdef: expect.stringContaining(`("updatedAt")`)
+        }),
+        expect.objectContaining({
+          indexname: "Message_conversationId_createdAt_idx",
+          indexdef: expect.stringContaining(`("conversationId", "createdAt")`)
+        }),
+        expect.objectContaining({
+          indexname: "Message_senderId_createdAt_idx",
+          indexdef: expect.stringContaining(`("senderId", "createdAt")`)
+        }),
+        expect.objectContaining({
+          indexname: "ConversationReadState_userId_updatedAt_idx",
+          indexdef: expect.stringContaining(`("userId", "updatedAt")`)
+        }),
+        expect.objectContaining({
+          indexname: "ConversationReadState_lastReadMessageId_idx",
+          indexdef: expect.stringContaining(`("lastReadMessageId")`)
         })
       ])
     );
@@ -277,6 +344,45 @@ describe("core Prisma schema", () => {
         VALUES (${userId}::uuid, ${userId}::uuid, NOW())
       `
     ).rejects.toThrow(/Follow_no_self_follow_check/);
+  });
+
+  it("allows only one direct conversation per user pair at the database layer", async () => {
+    const firstUserId = await insertUser("direct-a");
+    const secondUserId = await insertUser("direct-b");
+    const firstConversationId = randomUUID();
+    const directKey = buildDirectConversationKey(firstUserId, secondUserId);
+
+    await prisma.$executeRaw`
+      INSERT INTO "Conversation" (
+        "id",
+        "directKey",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        ${firstConversationId}::uuid,
+        ${directKey},
+        NOW(),
+        NOW()
+      )
+    `;
+
+    await expect(
+      prisma.$executeRaw`
+        INSERT INTO "Conversation" (
+          "id",
+          "directKey",
+          "createdAt",
+          "updatedAt"
+        )
+        VALUES (
+          ${randomUUID()}::uuid,
+          ${directKey},
+          NOW(),
+          NOW()
+        )
+      `
+    ).rejects.toThrow(/Conversation_directKey_key/);
   });
 
   it("preserves audit rows through actor deletion and allows guest events", async () => {

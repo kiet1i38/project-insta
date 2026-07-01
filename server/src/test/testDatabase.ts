@@ -8,6 +8,10 @@ const serverRoot = resolve(currentDir, "../..");
 const repoRoot = resolve(serverRoot, "..");
 
 const managedTables = [
+  `"ConversationReadState"`,
+  `"Message"`,
+  `"ConversationParticipant"`,
+  `"Conversation"`,
   `"AuditLog"`,
   `"ModerationAction"`,
   `"Report"`,
