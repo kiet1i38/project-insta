@@ -4,6 +4,7 @@ import {
   IconFileText,
   IconHome2,
   IconLogout2,
+  IconMessageCircle,
   IconPlus,
   IconSearch,
   IconShield,
@@ -36,6 +37,7 @@ export function AppShell() {
       ? [
           { to: "/", label: "Home", icon: IconHome2, end: true },
           { to: "/create", label: "Create", icon: IconPlus },
+          { to: "/messages", label: "Messages", icon: IconMessageCircle },
           { to: "/search", label: "Search", icon: IconSearch },
           { to: "/profile", label: "Profile", icon: IconUserCircle }
         ]

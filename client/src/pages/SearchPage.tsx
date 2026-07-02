@@ -1,9 +1,11 @@
 import { type FormEvent, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   ApiError,
   searchUsers,
   type SearchUser
 } from "../modules/auth/authApi";
+import { useAuthSession } from "../modules/auth/authSessionContext";
 
 const searchPageSize = 2;
 const suggestedQueries = ["alice", "bob", "admin", "demo"];
@@ -46,6 +48,7 @@ function getAvatarLabel(user: SearchUser): string {
 }
 
 export function SearchPage() {
+  const { user } = useAuthSession();
   const [queryInput, setQueryInput] = useState("");
   const [results, setResults] = useState<SearchUser[]>([]);
   const [pageInfo, setPageInfo] = useState<SearchPageInfo | null>(null);
@@ -218,31 +221,41 @@ export function SearchPage() {
             </div>
           ) : (
             <div className="search-results-grid">
-              {results.map((user) => (
-                <article className="mini-card search-result-card" key={user.id}>
+              {results.map((result) => (
+                <article className="mini-card search-result-card" key={result.id}>
                   <div className="search-result-header">
-                    {user.avatarUrl ? (
+                    {result.avatarUrl ? (
                       <img
-                        alt={`Avatar for ${user.displayName ?? user.username}`}
+                        alt={`Avatar for ${result.displayName ?? result.username}`}
                         className="search-result-avatar"
-                        src={user.avatarUrl}
+                        src={result.avatarUrl}
                       />
                     ) : (
                       <div
                         aria-hidden="true"
                         className="search-result-avatar search-result-avatar-fallback"
                       >
-                        {getAvatarLabel(user)}
+                        {getAvatarLabel(result)}
                       </div>
                     )}
                     <div>
-                      <h4>{user.displayName ?? user.username}</h4>
-                      <p className="profile-handle">@{user.username}</p>
+                      <h4>{result.displayName ?? result.username}</h4>
+                      <p className="profile-handle">@{result.username}</p>
                     </div>
                   </div>
                   <p className="search-result-bio">
-                    {user.bio ?? "No bio yet for this account."}
+                    {result.bio ?? "No bio yet for this account."}
                   </p>
+                  {user && result.id !== user.id ? (
+                    <div className="search-result-actions">
+                      <Link
+                        className="secondary-inline-link search-card-action"
+                        to={`/messages?with=${encodeURIComponent(result.id)}`}
+                      >
+                        Message
+                      </Link>
+                    </div>
+                  ) : null}
                 </article>
               ))}
             </div>

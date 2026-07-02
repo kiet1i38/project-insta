@@ -189,6 +189,89 @@ export type SearchUsersResponse = {
   users: SearchUser[];
 };
 
+export type ConversationPeer = {
+  avatarUrl: string | null;
+  displayName: string | null;
+  id: string;
+  username: string;
+};
+
+export type ConversationMessagePreview = {
+  content: string;
+  createdAt: string;
+  id: string;
+  senderId: string;
+};
+
+export type ConversationSummary = {
+  id: string;
+  lastMessage: ConversationMessagePreview | null;
+  peer: ConversationPeer;
+  unreadCount: number;
+  updatedAt: string;
+};
+
+export type ConversationsResponse = {
+  conversations: ConversationSummary[];
+  pageInfo: {
+    hasNextPage: boolean;
+    limit: number;
+    nextCursor: string | null;
+  };
+  requestId: string;
+};
+
+export type ConversationMessage = {
+  content: string;
+  conversationId: string;
+  createdAt: string;
+  id: string;
+  sender: ConversationPeer;
+};
+
+export type ConversationReadState = {
+  conversationId: string;
+  lastReadAt: string | null;
+  lastReadMessageId: string | null;
+};
+
+export type ConversationThreadResponse = {
+  conversation: {
+    id: string;
+    peer: ConversationPeer;
+  };
+  messages: ConversationMessage[];
+  pageInfo: {
+    hasNextPage: boolean;
+    limit: number;
+    nextCursor: string | null;
+  };
+  readState: ConversationReadState;
+  requestId: string;
+};
+
+export type CreateDirectConversationInput = {
+  participantUserId: string;
+};
+
+export type GetConversationsInput = {
+  cursor?: string | null;
+  limit?: number;
+};
+
+export type GetConversationMessagesInput = {
+  cursor?: string | null;
+  limit?: number;
+};
+
+export type CreateConversationMessageInput = {
+  content: string;
+};
+
+export type MarkConversationReadInput = {
+  messageId: string;
+};
+
 export type ModerationReportStatus = "DISMISSED" | "PENDING" | "RESOLVED";
 
 export type ModerationSortOrder = "newest" | "oldest";
@@ -770,6 +853,99 @@ export async function searchUsers(
   return requestJson<SearchUsersResponse>(`/users/search?${params.toString()}`, {
     includeAccessToken: true,
     method: "GET"
+  });
+}
+
+export async function createDirectConversation(
+  input: CreateDirectConversationInput
+): Promise<{
+  conversation: ConversationSummary;
+  requestId: string;
+}> {
+  return requestJson<{
+    conversation: ConversationSummary;
+    requestId: string;
+  }>("/conversations", {
+    body: input,
+    includeAccessToken: true,
+    method: "POST"
+  });
+}
+
+export async function getConversations(
+  input: GetConversationsInput = {}
+): Promise<ConversationsResponse> {
+  const params = new URLSearchParams();
+
+  params.set("limit", String(input.limit ?? 10));
+
+  if (input.cursor) {
+    params.set("cursor", input.cursor);
+  }
+
+  return requestJson<ConversationsResponse>(
+    `/conversations?${params.toString()}`,
+    {
+      includeAccessToken: true,
+      method: "GET"
+    }
+  );
+}
+
+export async function getConversationMessages(
+  conversationId: string,
+  input: GetConversationMessagesInput = {}
+): Promise<ConversationThreadResponse> {
+  const params = new URLSearchParams();
+
+  params.set("limit", String(input.limit ?? 20));
+
+  if (input.cursor) {
+    params.set("cursor", input.cursor);
+  }
+
+  return requestJson<ConversationThreadResponse>(
+    `/conversations/${encodeURIComponent(conversationId)}/messages?${params.toString()}`,
+    {
+      includeAccessToken: true,
+      method: "GET"
+    }
+  );
+}
+
+export async function createConversationMessage(
+  conversationId: string,
+  input: CreateConversationMessageInput
+): Promise<{
+  message: ConversationMessage;
+  requestId: string;
+}> {
+  return requestJson<{
+    message: ConversationMessage;
+    requestId: string;
+  }>(`/conversations/${encodeURIComponent(conversationId)}/messages`, {
+    body: {
+      content: input.content
+    },
+    includeAccessToken: true,
+    method: "POST"
+  });
+}
+
+export async function markConversationRead(
+  conversationId: string,
+  input: MarkConversationReadInput
+): Promise<{
+  readState: ConversationReadState;
+  requestId: string;
+}> {
+  return requestJson<{
+    readState: ConversationReadState;
+    requestId: string;
+  }>(`/conversations/${encodeURIComponent(conversationId)}/read`, {
+    body: input,
+    includeAccessToken: true,
+    method: "POST"
   });
 }
 

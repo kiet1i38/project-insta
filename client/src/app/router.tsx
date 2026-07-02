@@ -6,6 +6,7 @@ import { CreatePostPage } from "../pages/CreatePostPage";
 import { EditProfilePage } from "../pages/EditProfilePage";
 import { FeedPage } from "../pages/FeedPage";
 import { LoginPage } from "../pages/LoginPage";
+import { MessagesPage } from "../pages/MessagesPage";
 import { ModerationQueuePage } from "../pages/ModerationQueuePage";
 import { NotFoundPage } from "../pages/NotFoundPage";
 import { PostDetailPage } from "../pages/PostDetailPage";
@@ -22,6 +23,8 @@ export function AppRoutes() {
         <Route element={<ProtectedRoute />}>
           <Route element={<FeedPage />} index />
           <Route element={<CreatePostPage />} path="create" />
+          <Route element={<MessagesPage />} path="messages" />
+          <Route element={<MessagesPage />} path="messages/:conversationId" />
           <Route element={<PostDetailPage />} path="posts/:postId" />
           <Route element={<ProfilePage />} path="profile" />
           <Route element={<EditProfilePage />} path="profile/edit" />
