@@ -1,6 +1,7 @@
 import { Prisma } from "../../generated/prisma/client.js";
 import { prisma } from "../../db/prisma.js";
 import type {
+  ConversationFolderInput,
   ConversationCursor,
   MessageCursor
 } from "./messages.schema.js";
@@ -12,6 +13,10 @@ const conversationPeerSelect = {
   username: true
 } satisfies Prisma.UserSelect;
 
+const followedPeerSelect = {
+  followerId: true
+} satisfies Prisma.FollowSelect;
+
 const conversationMessagePreviewSelect = {
   content: true,
   createdAt: true,
@@ -19,14 +24,38 @@ const conversationMessagePreviewSelect = {
   senderId: true
 } satisfies Prisma.MessageSelect;
 
+const buildConversationSummaryPeerSelect = (viewerId: string) =>
+  ({
+    avatarUrl: true,
+    displayName: true,
+    followers: {
+      select: followedPeerSelect,
+      take: 1,
+      where: {
+        followerId: viewerId
+      }
+    },
+    id: true,
+    username: true
+  }) satisfies Prisma.UserSelect;
+
 const buildConversationSummarySelect = (viewerId: string) =>
   ({
+    _count: {
+      select: {
+        messages: {
+          where: {
+            senderId: viewerId
+          }
+        }
+      }
+    },
     id: true,
     updatedAt: true,
     participants: {
       select: {
         user: {
-          select: conversationPeerSelect
+          select: buildConversationSummaryPeerSelect(viewerId)
         },
         userId: true
       }
@@ -72,6 +101,44 @@ const activeConversationPeerSelect = conversationPeerSelect satisfies Prisma.Use
 export type ActiveConversationPeerRecord = Prisma.UserGetPayload<{
   select: typeof activeConversationPeerSelect;
 }>;
+
+function buildRequestConversationWhereClause(
+  viewerId: string
+): Prisma.ConversationWhereInput {
+  return {
+    AND: [
+      {
+        messages: {
+          some: {
+            senderId: {
+              not: viewerId
+            }
+          }
+        }
+      },
+      {
+        messages: {
+          none: {
+            senderId: viewerId
+          }
+        }
+      },
+      {
+        participants: {
+          none: {
+            user: {
+              followers: {
+                some: {
+                  followerId: viewerId
+                }
+              }
+            }
+          }
+        }
+      }
+    ]
+  };
+}
 
 function buildConversationCursorWhereClause(
   cursor?: ConversationCursor
@@ -218,10 +285,20 @@ export async function findConversationRoomIdsForUser(userId: string): Promise<st
 
 export async function findConversationSummariesForUser(input: {
   cursor?: ConversationCursor;
+  folder: ConversationFolderInput;
   limit: number;
   viewerId: string;
 }): Promise<ConversationSummaryRecord[]> {
   const paginationFilter = buildConversationCursorWhereClause(input.cursor);
+  const requestConversationFilter = buildRequestConversationWhereClause(
+    input.viewerId
+  );
+  const folderFilter =
+    input.folder === "requests"
+      ? requestConversationFilter
+      : {
+          NOT: requestConversationFilter
+        };
 
   return prisma.conversation.findMany({
     orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
@@ -236,6 +313,7 @@ export async function findConversationSummariesForUser(input: {
             }
           }
         },
+        folderFilter,
         ...(paginationFilter ? [paginationFilter] : [])
       ]
     }

@@ -27,6 +27,8 @@ import {
 export const MESSAGE_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 export const MESSAGE_RATE_LIMIT_MAX = 20;
 
+export type ConversationFolderDto = "INBOX" | "REQUESTS";
+
 export type ConversationPeerDto = {
   avatarUrl: string | null;
   displayName: string | null;
@@ -42,6 +44,7 @@ export type ConversationMessagePreviewDto = {
 };
 
 export type ConversationSummaryDto = {
+  folder: ConversationFolderDto;
   id: string;
   lastMessage: ConversationMessagePreviewDto | null;
   peer: ConversationPeerDto;
@@ -68,6 +71,7 @@ export type ConversationMessageDto = {
 
 export type ConversationThreadDto = {
   conversation: {
+    folder: ConversationFolderDto;
     id: string;
     peer: ConversationPeerDto;
   };
@@ -194,6 +198,7 @@ async function toConversationSummaryDto(
   });
 
   return {
+    folder: getConversationFolder(record, viewerId),
     id: record.id,
     lastMessage: lastMessage
       ? {
@@ -237,6 +242,29 @@ function toConversationReadStateDto(
     lastReadAt: input.lastReadAt,
     lastReadMessageId: input.lastReadMessageId
   };
+}
+
+function getConversationFolder(
+  record: ConversationSummaryRecord,
+  viewerId: string
+): ConversationFolderDto {
+  const lastMessage = record.messages[0] ?? null;
+  const peer =
+    record.participants.find((participant) => participant.userId !== viewerId) ??
+    null;
+  const viewerFollowsPeer = (peer?.user.followers.length ?? 0) > 0;
+  const viewerHasSentMessage = record._count.messages > 0;
+
+  if (
+    !viewerHasSentMessage &&
+    !viewerFollowsPeer &&
+    lastMessage &&
+    lastMessage.senderId !== viewerId
+  ) {
+    return "REQUESTS";
+  }
+
+  return "INBOX";
 }
 
 function getConversationParticipantUserIds(
@@ -336,6 +364,7 @@ async function buildConversationThreadDto(input: {
 
   return {
     conversation: {
+      folder: getConversationFolder(input.conversation, input.viewerId),
       id: input.conversation.id,
       peer: getConversationPeerOrThrow(input.conversation.participants, input.viewerId)
     },
@@ -415,6 +444,7 @@ export async function listConversations(input: {
 }): Promise<ConversationPageDto> {
   const fetchedConversations = await findConversationSummariesForUser({
     cursor: input.query.cursor,
+    folder: input.query.folder,
     limit: input.query.limit,
     viewerId: input.viewerId
   });

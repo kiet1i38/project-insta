@@ -684,6 +684,7 @@ describe("messages realtime transport", () => {
           }
         | ServerAckError
       >(recipientSocket, "conversations:sync", {
+        folder: "requests",
         limit: 20
       });
 

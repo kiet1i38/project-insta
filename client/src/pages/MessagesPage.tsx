@@ -22,6 +22,7 @@ import { useAuthSession } from "../modules/auth/authSessionContext";
 
 const conversationPageSize = 10;
 const messagePageSize = 20;
+type MessagesFolderView = "inbox" | "requests";
 
 type MessagesThreadState = {
   conversation: {
@@ -89,6 +90,29 @@ function upsertConversation(
     nextConversation,
     ...remainingConversations
   ]);
+}
+
+function matchesConversationFolder(
+  conversation: ConversationSummary,
+  folder: MessagesFolderView
+): boolean {
+  return folder === "requests"
+    ? conversation.folder === "REQUESTS"
+    : conversation.folder === "INBOX";
+}
+
+function syncConversationForFolder(
+  conversations: ConversationSummary[],
+  nextConversation: ConversationSummary,
+  folder: MessagesFolderView
+): ConversationSummary[] {
+  if (!matchesConversationFolder(nextConversation, folder)) {
+    return conversations.filter(
+      (conversation) => conversation.id !== nextConversation.id
+    );
+  }
+
+  return upsertConversation(conversations, nextConversation);
 }
 
 function mergeConversations(
@@ -197,6 +221,8 @@ export function MessagesPage() {
   } | null>(null);
 
   const requestedUserId = searchParams.get("with");
+  const activeFolder: MessagesFolderView =
+    searchParams.get("view") === "requests" ? "requests" : "inbox";
 
   useEffect(() => {
     if (requestedUserId) {
@@ -211,6 +237,7 @@ export function MessagesPage() {
 
       try {
         const response = await getConversations({
+          folder: activeFolder,
           limit: conversationPageSize
         });
 
@@ -230,7 +257,9 @@ export function MessagesPage() {
         setConversationError(
           getErrorMessage(
             error,
-            "Could not load the inbox right now. Please try again."
+            activeFolder === "inbox"
+              ? "Could not load the inbox right now. Please try again."
+              : "Could not load message requests right now. Please try again."
           )
         );
       } finally {
@@ -245,7 +274,7 @@ export function MessagesPage() {
     return () => {
       isActive = false;
     };
-  }, [requestedUserId]);
+  }, [activeFolder, requestedUserId]);
 
   useEffect(() => {
     const participantUserId = requestedUserId;
@@ -271,7 +300,11 @@ export function MessagesPage() {
         }
 
         setConversations((currentConversations) =>
-          upsertConversation(currentConversations, response.conversation)
+          syncConversationForFolder(
+            currentConversations,
+            response.conversation,
+            activeFolder
+          )
         );
         navigate(`/messages/${response.conversation.id}`, { replace: true });
       } catch (error) {
@@ -297,7 +330,7 @@ export function MessagesPage() {
     return () => {
       isActive = false;
     };
-  }, [navigate, requestedUserId]);
+  }, [activeFolder, navigate, requestedUserId]);
 
   useEffect(() => {
     if (!accessToken || !user) {
@@ -337,7 +370,10 @@ export function MessagesPage() {
             return currentConversations;
           }
 
-          return upsertConversation(currentConversations, {
+          return syncConversationForFolder(currentConversations, {
+            folder:
+              existingConversation?.folder ??
+              (message.sender.id === user.id ? "INBOX" : "REQUESTS"),
             id: message.conversationId,
             lastMessage: toConversationPreview(message),
             peer,
@@ -346,7 +382,7 @@ export function MessagesPage() {
                 ? 0
                 : (existingConversation?.unreadCount ?? 0) + 1,
             updatedAt: message.createdAt
-          });
+          }, activeFolder);
         });
 
         if (
@@ -416,7 +452,11 @@ export function MessagesPage() {
       },
       onConversationSummaryUpdated: ({ conversation }) => {
         setConversations((currentConversations) =>
-          upsertConversation(currentConversations, conversation)
+          syncConversationForFolder(
+            currentConversations,
+            conversation,
+            activeFolder
+          )
         );
       },
       onDisconnected: () => {
@@ -437,7 +477,7 @@ export function MessagesPage() {
 
       setIsRealtimeConnected(false);
     };
-  }, [accessToken, conversationId, user]);
+  }, [accessToken, activeFolder, conversationId, user]);
 
   useEffect(() => {
     const selectedConversationId = conversationId;
@@ -550,6 +590,7 @@ export function MessagesPage() {
     try {
       const response = await getConversations({
         cursor: conversationsPageInfo.nextCursor,
+        folder: activeFolder,
         limit: conversationPageSize
       });
 
@@ -652,13 +693,14 @@ export function MessagesPage() {
           : currentThread
       );
       setConversations((currentConversations) =>
-        upsertConversation(currentConversations, {
+        syncConversationForFolder(currentConversations, {
+          folder: "INBOX",
           id: conversationId,
           lastMessage: toConversationPreview(response.message),
           peer: thread.conversation.peer,
           unreadCount: 0,
           updatedAt: response.message.createdAt
-        })
+        }, activeFolder)
       );
       setDraft("");
     } catch (error) {
@@ -680,19 +722,44 @@ export function MessagesPage() {
     >
       <div className="messages-layout">
         <aside className="messages-sidebar">
-          <div className="messages-sidebar-header">
-            <div className="auth-copy messages-hero-copy">
-              <p className="messages-kicker">Slice 9C</p>
-              <h2>Messages</h2>
-              <p>
-                Keep the 1:1 inbox and thread view on top of the verified chat
-                backend.
-              </p>
+            <div className="messages-sidebar-header">
+              <div className="auth-copy messages-hero-copy">
+                <p className="messages-kicker">Slice 9C</p>
+                <h2>Messages</h2>
+                <p>
+                  Keep the 1:1 inbox and thread view on top of the verified chat
+                  backend.
+                </p>
+              </div>
+              <Link className="secondary-inline-link" to="/search">
+                Search people
+              </Link>
             </div>
-            <Link className="secondary-inline-link" to="/search">
-              Search people
+
+          <nav className="messages-view-toggle" aria-label="Messages folders">
+            <Link
+              aria-current={activeFolder === "inbox" ? "page" : undefined}
+              className={
+                activeFolder === "inbox"
+                  ? "messages-view-tab messages-view-tab-active"
+                  : "messages-view-tab"
+              }
+              to="/messages"
+            >
+              Inbox
             </Link>
-          </div>
+            <Link
+              aria-current={activeFolder === "requests" ? "page" : undefined}
+              className={
+                activeFolder === "requests"
+                  ? "messages-view-tab messages-view-tab-active"
+                  : "messages-view-tab"
+              }
+              to="/messages?view=requests"
+            >
+              Requests
+            </Link>
+          </nav>
 
           {conversationError ? (
             <p className="form-status" data-tone="error" role="status">
@@ -714,11 +781,21 @@ export function MessagesPage() {
             </div>
           ) : conversations.length === 0 ? (
             <div className="messages-empty-state">
-              <h3>No conversations yet.</h3>
-              <p>Search for a classmate or demo account to start the first thread.</p>
-              <Link className="secondary-inline-link" to="/search">
-                Search people
-              </Link>
+              <h3>
+                {activeFolder === "requests"
+                  ? "No message requests."
+                  : "No conversations yet."}
+              </h3>
+              <p>
+                {activeFolder === "requests"
+                  ? "Requests from people you do not follow will appear here."
+                  : "Search for a classmate or demo account to start the first thread."}
+              </p>
+              {activeFolder === "inbox" ? (
+                <Link className="secondary-inline-link" to="/search">
+                  Search people
+                </Link>
+              ) : null}
             </div>
           ) : (
             <>
@@ -761,6 +838,9 @@ export function MessagesPage() {
                         </span>
                       </div>
                       <p className="profile-handle">@{conversation.peer.username}</p>
+                      {conversation.folder === "REQUESTS" ? (
+                        <p className="messages-request-pill">Request</p>
+                      ) : null}
                       <p className="messages-conversation-preview">
                         {conversation.lastMessage?.content ?? "No messages yet."}
                       </p>
@@ -784,7 +864,9 @@ export function MessagesPage() {
                 >
                   {isLoadingMoreConversations
                     ? "Loading more..."
-                    : "Load more conversations"}
+                    : activeFolder === "requests"
+                      ? "Load more requests"
+                      : "Load more conversations"}
                 </button>
               ) : null}
             </>

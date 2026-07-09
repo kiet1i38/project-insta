@@ -204,6 +204,7 @@ export type ConversationMessagePreview = {
 };
 
 export type ConversationSummary = {
+  folder: "INBOX" | "REQUESTS";
   id: string;
   lastMessage: ConversationMessagePreview | null;
   peer: ConversationPeer;
@@ -256,6 +257,7 @@ export type CreateDirectConversationInput = {
 
 export type GetConversationsInput = {
   cursor?: string | null;
+  folder?: "inbox" | "requests";
   limit?: number;
 };
 
@@ -877,6 +879,7 @@ export async function getConversations(
 ): Promise<ConversationsResponse> {
   const params = new URLSearchParams();
 
+  params.set("folder", input.folder ?? "inbox");
   params.set("limit", String(input.limit ?? 10));
 
   if (input.cursor) {

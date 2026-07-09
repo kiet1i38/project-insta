@@ -168,6 +168,7 @@ export function createMessagesRealtimeClient(input: { accessToken: string }) {
         "conversations:sync",
         {
           cursor: input.cursor ?? undefined,
+          folder: input.folder ?? "inbox",
           limit: input.limit ?? 10
         }
       );

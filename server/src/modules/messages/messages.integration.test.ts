@@ -387,6 +387,18 @@ describe("messages conversations API", () => {
       userAId: outsiderPeer.user.id,
       userBId: newerPeer.user.id
     });
+    await prisma.follow.createMany({
+      data: [
+        {
+          followerId: viewer.user.id,
+          followingId: newerPeer.user.id
+        },
+        {
+          followerId: viewer.user.id,
+          followingId: olderPeer.user.id
+        }
+      ]
+    });
 
     const olderMessage = await insertMessage({
       content: "Earlier thread message",
@@ -420,6 +432,7 @@ describe("messages conversations API", () => {
     );
     expect(firstPageResponse.body.conversations).toHaveLength(1);
     expect(firstPageResponse.body.conversations[0]).toMatchObject({
+      folder: "INBOX",
       id: newerConversation.conversationId,
       lastMessage: {
         content: "Most recent unread message",
@@ -450,6 +463,7 @@ describe("messages conversations API", () => {
     expect(secondPageResponse.status).toBe(200);
     expect(secondPageResponse.body.conversations).toHaveLength(1);
     expect(secondPageResponse.body.conversations[0]).toMatchObject({
+      folder: "INBOX",
       id: olderConversation.conversationId,
       peer: {
         displayName: "Older Peer",
@@ -461,6 +475,120 @@ describe("messages conversations API", () => {
     expect(secondPageResponse.body.pageInfo).toMatchObject({
       hasNextPage: false,
       limit: 1,
+      nextCursor: null
+    });
+  });
+
+  test("GET /api/v1/conversations supports inbox vs requests filtering for non-followed senders", async () => {
+    const viewer = await createUserFixture({
+      email: "viewer-requests@example.com",
+      username: "viewer_requests"
+    });
+    const followedPeer = await createUserFixture({
+      displayName: "Followed Peer",
+      email: "peer-followed@example.com",
+      username: "peer_followed"
+    });
+    const requesterPeer = await createUserFixture({
+      displayName: "Requester Peer",
+      email: "peer-requester@example.com",
+      username: "peer_requester"
+    });
+    const acceptedPeer = await createUserFixture({
+      displayName: "Accepted Peer",
+      email: "peer-accepted@example.com",
+      username: "peer_accepted"
+    });
+    const accessToken = await loginAndGetAccessToken(
+      viewer.user.email,
+      viewer.password
+    );
+
+    const followedConversation = await insertDirectConversation({
+      updatedAt: new Date("2026-07-01T09:00:00.000Z"),
+      userAId: viewer.user.id,
+      userBId: followedPeer.user.id
+    });
+    const requestConversation = await insertDirectConversation({
+      updatedAt: new Date("2026-07-01T10:00:00.000Z"),
+      userAId: viewer.user.id,
+      userBId: requesterPeer.user.id
+    });
+    const acceptedConversation = await insertDirectConversation({
+      updatedAt: new Date("2026-07-01T11:00:00.000Z"),
+      userAId: viewer.user.id,
+      userBId: acceptedPeer.user.id
+    });
+
+    await prisma.follow.create({
+      data: {
+        followerId: viewer.user.id,
+        followingId: followedPeer.user.id
+      }
+    });
+
+    await insertMessage({
+      content: "Message from followed peer",
+      conversationId: followedConversation.conversationId,
+      createdAt: new Date("2026-07-01T09:00:00.000Z"),
+      senderId: followedPeer.user.id
+    });
+    await insertMessage({
+      content: "First request message",
+      conversationId: requestConversation.conversationId,
+      createdAt: new Date("2026-07-01T10:00:00.000Z"),
+      senderId: requesterPeer.user.id
+    });
+    await insertMessage({
+      content: "Initial request before reply",
+      conversationId: acceptedConversation.conversationId,
+      createdAt: new Date("2026-07-01T10:30:00.000Z"),
+      senderId: acceptedPeer.user.id
+    });
+    await insertMessage({
+      content: "Viewer already replied",
+      conversationId: acceptedConversation.conversationId,
+      createdAt: new Date("2026-07-01T11:00:00.000Z"),
+      senderId: viewer.user.id
+    });
+
+    const inboxResponse = await request(app)
+      .get("/api/v1/conversations")
+      .query({ folder: "inbox", limit: "10" })
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(inboxResponse.status).toBe(200);
+    expect(inboxResponse.body.conversations).toHaveLength(2);
+    expect(inboxResponse.body.conversations).toEqual([
+      expect.objectContaining({
+        folder: "INBOX",
+        id: acceptedConversation.conversationId
+      }),
+      expect.objectContaining({
+        folder: "INBOX",
+        id: followedConversation.conversationId
+      })
+    ]);
+
+    const requestsResponse = await request(app)
+      .get("/api/v1/conversations")
+      .query({ folder: "requests", limit: "10" })
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(requestsResponse.status).toBe(200);
+    expect(requestsResponse.body.conversations).toEqual([
+      expect.objectContaining({
+        folder: "REQUESTS",
+        id: requestConversation.conversationId,
+        peer: expect.objectContaining({
+          id: requesterPeer.user.id,
+          username: "peer_requester"
+        })
+      })
+    ]);
+    expect(requestsResponse.body.pageInfo).toMatchObject({
+      hasNextPage: false,
+      limit: 10,
       nextCursor: null
     });
   });
@@ -707,6 +835,12 @@ describe("messages conversations API", () => {
     const conversation = await insertDirectConversation({
       userAId: viewer.user.id,
       userBId: peer.user.id
+    });
+    await prisma.follow.create({
+      data: {
+        followerId: viewer.user.id,
+        followingId: peer.user.id
+      }
     });
     const unreadMessageId = await insertMessage({
       content: "Unread message for read-state test",

@@ -540,4 +540,70 @@ describe("Messages UI", () => {
 
     expect(await screen.findAllByText(/reply from socket/i)).not.toHaveLength(0);
   });
+
+  it("shows message requests in a dedicated requests view", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (input === "http://localhost:3001/api/v1/auth/refresh") {
+        return jsonResponse({
+          accessToken: "messages-access-token",
+          requestId: "req-messages-refresh",
+          user: demoUser
+        });
+      }
+
+      if (
+        input ===
+          "http://localhost:3001/api/v1/conversations?folder=requests&limit=10" &&
+        init?.method === "GET"
+      ) {
+        return jsonResponse({
+          conversations: [
+            {
+              folder: "REQUESTS",
+              id: "conversation-request-1",
+              lastMessage: {
+                content: "Hi, can we talk?",
+                createdAt: "2026-07-02T08:00:00.000Z",
+                id: "message-request-1",
+                senderId: "user-bob"
+              },
+              peer: {
+                avatarUrl: null,
+                displayName: "Bob Demo",
+                id: "user-bob",
+                username: "bob_demo"
+              },
+              unreadCount: 1,
+              updatedAt: "2026-07-02T08:00:00.000Z"
+            }
+          ],
+          pageInfo: {
+            hasNextPage: false,
+            limit: 10,
+            nextCursor: null
+          },
+          requestId: "req-messages-requests"
+        });
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)} ${String(init?.method)}`);
+    });
+
+    document.cookie = "cloneinsta_csrf=csrf-messages; path=/";
+    window.history.pushState({}, "", "/messages?view=requests");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", { level: 2, name: /^messages$/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /requests/i })
+    ).toHaveAttribute("aria-current", "page");
+    expect(
+      await screen.findByRole("link", { name: /open chat with bob demo/i })
+    ).toBeInTheDocument();
+    expect(screen.getByText(/^request$/i)).toBeInTheDocument();
+    expect(screen.getByText(/hi, can we talk\?/i)).toBeInTheDocument();
+  });
 });

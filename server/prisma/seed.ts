@@ -140,6 +140,21 @@ export async function seedDatabase(client: PrismaClient = prisma): Promise<SeedS
   const userPasswordHash = await hash(DEMO_USER_PASSWORD, BCRYPT_ROUNDS);
 
   await client.$transaction(async (tx) => {
+    const demoConversationParticipants =
+      await tx.conversationParticipant.findMany({
+        select: {
+          conversationId: true
+        },
+        where: {
+          userId: { in: demoUserIds as unknown as string[] }
+        }
+      });
+    const demoConversationIds = [
+      ...new Set(
+        demoConversationParticipants.map((participant) => participant.conversationId)
+      )
+    ];
+
     await tx.moderationAction.deleteMany({
       where: {
         OR: [
@@ -162,6 +177,34 @@ export async function seedDatabase(client: PrismaClient = prisma): Promise<SeedS
     });
 
     await Promise.all([
+      demoConversationIds.length > 0
+        ? tx.conversationReadState.deleteMany({
+            where: {
+              conversationId: { in: demoConversationIds }
+            }
+          })
+        : Promise.resolve({ count: 0 }),
+      demoConversationIds.length > 0
+        ? tx.message.deleteMany({
+            where: {
+              conversationId: { in: demoConversationIds }
+            }
+          })
+        : Promise.resolve({ count: 0 }),
+      demoConversationIds.length > 0
+        ? tx.conversationParticipant.deleteMany({
+            where: {
+              conversationId: { in: demoConversationIds }
+            }
+          })
+        : Promise.resolve({ count: 0 }),
+      demoConversationIds.length > 0
+        ? tx.conversation.deleteMany({
+            where: {
+              id: { in: demoConversationIds }
+            }
+          })
+        : Promise.resolve({ count: 0 }),
       tx.like.deleteMany({
         where: {
           OR: [

@@ -26,7 +26,7 @@ describe.sequential("database seed", () => {
 
     expect(firstSeed.status).toBe(0);
 
-    const [users, posts, comments, likes, follows, reports, moderationActions, auditLogs, refreshTokens] =
+    const [users, posts, comments, likes, follows, reports, moderationActions, auditLogs, refreshTokens, conversations, messages] =
       await Promise.all([
         prisma.user.count(),
         prisma.post.count(),
@@ -36,7 +36,9 @@ describe.sequential("database seed", () => {
         prisma.report.count(),
         prisma.moderationAction.count(),
         prisma.auditLog.count(),
-        prisma.refreshToken.count()
+        prisma.refreshToken.count(),
+        prisma.conversation.count(),
+        prisma.message.count()
       ]);
 
     expect({
@@ -48,7 +50,9 @@ describe.sequential("database seed", () => {
       reports,
       moderationActions,
       auditLogs,
-      refreshTokens
+      refreshTokens,
+      conversations,
+      messages
     }).toEqual({
       users: 3,
       posts: 2,
@@ -58,7 +62,9 @@ describe.sequential("database seed", () => {
       reports: 2,
       moderationActions: 1,
       auditLogs: 2,
-      refreshTokens: 0
+      refreshTokens: 0,
+      conversations: 0,
+      messages: 0
     });
 
     const adminUser = await prisma.user.findUnique({
@@ -139,14 +145,55 @@ describe.sequential("database seed", () => {
       }
     });
 
+    await prisma.conversation.create({
+      data: {
+        directKey:
+          "10000000-0000-4000-8000-000000000002:10000000-0000-4000-8000-000000000003",
+        id: "80000000-0000-4000-8000-000000000001",
+        messages: {
+          create: {
+            content: "Local chat smoke artifact that the next seed should remove.",
+            createdAt: new Date("2026-07-10T00:00:00.000Z"),
+            id: "81000000-0000-4000-8000-000000000001",
+            senderId: "10000000-0000-4000-8000-000000000003"
+          }
+        },
+        participants: {
+          create: [
+            {
+              userId: "10000000-0000-4000-8000-000000000002"
+            },
+            {
+              userId: "10000000-0000-4000-8000-000000000003"
+            }
+          ]
+        },
+        readStates: {
+          create: [
+            {
+              userId: "10000000-0000-4000-8000-000000000002"
+            },
+            {
+              lastReadAt: new Date("2026-07-10T00:00:00.000Z"),
+              lastReadMessageId: "81000000-0000-4000-8000-000000000001",
+              userId: "10000000-0000-4000-8000-000000000003"
+            }
+          ]
+        },
+        updatedAt: new Date("2026-07-10T00:00:00.000Z")
+      }
+    });
+
     const countsAfterLocalMutations = await Promise.all([
       prisma.post.count(),
       prisma.comment.count(),
       prisma.like.count(),
-      prisma.refreshToken.count()
+      prisma.refreshToken.count(),
+      prisma.conversation.count(),
+      prisma.message.count()
     ]);
 
-    expect(countsAfterLocalMutations).toEqual([3, 2, 2, 1]);
+    expect(countsAfterLocalMutations).toEqual([3, 2, 2, 1, 1, 1]);
 
     const secondSeed = runRepoScript("db:seed");
 
@@ -161,9 +208,11 @@ describe.sequential("database seed", () => {
       prisma.report.count(),
       prisma.moderationAction.count(),
       prisma.auditLog.count(),
-      prisma.refreshToken.count()
+      prisma.refreshToken.count(),
+      prisma.conversation.count(),
+      prisma.message.count()
     ]);
 
-    expect(countsAfterSecondSeed).toEqual([3, 2, 1, 1, 1, 2, 1, 2, 0]);
+    expect(countsAfterSecondSeed).toEqual([3, 2, 1, 1, 1, 2, 1, 2, 0, 0, 0]);
   }, 15000);
 });

@@ -8,6 +8,10 @@ const paginationLimitSchema = z.coerce
   .max(20, "Limit must be 20 or fewer.")
   .default(20);
 
+const conversationFolderSchema = z
+  .enum(["inbox", "requests"])
+  .default("inbox");
+
 const inboxCursorPayloadSchema = z
   .object({
     id: z.string().uuid(),
@@ -63,6 +67,7 @@ export const listConversationsQuerySchema = z.object({
       ctx
     );
   }),
+  folder: conversationFolderSchema,
   limit: paginationLimitSchema
 });
 
@@ -128,6 +133,7 @@ export type ConversationCursor = z.infer<typeof inboxCursorPayloadSchema>;
 export type ListConversationsQueryInput = z.infer<
   typeof listConversationsQuerySchema
 >;
+export type ConversationFolderInput = z.infer<typeof conversationFolderSchema>;
 export type MessageCursor = z.infer<typeof messageCursorPayloadSchema>;
 export type ListConversationMessagesQueryInput = z.infer<
   typeof listConversationMessagesQuerySchema
