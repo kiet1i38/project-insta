@@ -8,6 +8,7 @@ import { prisma } from "../../db/prisma.js";
 import { createSocketServer } from "../../realtime/socketServer.js";
 import { resetDatabaseTables } from "../../test/testDatabase.js";
 import { hashPassword } from "../auth/password.js";
+import { MESSAGE_RATE_LIMIT_MAX } from "./messages.service.js";
 
 type ServerAckError = {
   error: {
@@ -487,6 +488,141 @@ describe("messages realtime transport", () => {
       `;
 
       expect(persistedMessages[0]?.count).toBe(1n);
+    } finally {
+      senderSocket.close();
+      recipientSocket.close();
+    }
+  });
+
+  test("rate limits new realtime message bursts but still acknowledges idempotent retries for an existing clientMessageId", async () => {
+    const sender = await createUserFixture({
+      email: "rate-sender@example.com",
+      username: "rate_sender"
+    });
+    const recipient = await createUserFixture({
+      email: "rate-recipient@example.com",
+      username: "rate_recipient"
+    });
+    const senderAccessToken = await loginAndGetAccessToken(
+      sender.user.email,
+      sender.password
+    );
+    const recipientAccessToken = await loginAndGetAccessToken(
+      recipient.user.email,
+      recipient.password
+    );
+    const conversationId = await createDirectConversationFixture({
+      accessToken: senderAccessToken,
+      participantUserId: recipient.user.id
+    });
+    const senderSocket = await connectRealtimeSocket(senderAccessToken);
+    const recipientSocket = await connectRealtimeSocket(recipientAccessToken);
+    const clientMessageId = randomUUID();
+
+    try {
+      const createdEventPromise = waitForSocketEvent<ConversationMessageEvent>(
+        recipientSocket,
+        "conversation:message:created"
+      );
+      const firstAck = await emitWithAck<ConversationMessageAck | ServerAckError>(
+        senderSocket,
+        "conversation:message:create",
+        {
+          clientMessageId,
+          content: "Base message before the burst limit",
+          conversationId
+        }
+      );
+
+      expect("message" in firstAck).toBe(true);
+
+      const createdEvent = await createdEventPromise;
+      expect(createdEvent.message.id).toBe((firstAck as ConversationMessageAck).message.id);
+
+      for (let index = 1; index < MESSAGE_RATE_LIMIT_MAX; index += 1) {
+        await prisma.message.create({
+          data: {
+            content: `Realtime filler ${index}`,
+            conversationId,
+            createdAt: new Date(Date.now() - 400 + index),
+            senderId: sender.user.id
+          }
+        });
+      }
+
+      let duplicateEventReceived = false;
+      recipientSocket.once("conversation:message:created", () => {
+        duplicateEventReceived = true;
+      });
+
+      const retryAck = await emitWithAck<ConversationMessageAck | ServerAckError>(
+        senderSocket,
+        "conversation:message:create",
+        {
+          clientMessageId,
+          content: "Base message before the burst limit",
+          conversationId
+        }
+      );
+
+      expect("message" in retryAck).toBe(true);
+      expect((retryAck as ConversationMessageAck).message.id).toBe(
+        (firstAck as ConversationMessageAck).message.id
+      );
+
+      await waitForTick();
+
+      expect(duplicateEventReceived).toBe(false);
+
+      let blockedEventReceived = false;
+      recipientSocket.once("conversation:message:created", () => {
+        blockedEventReceived = true;
+      });
+
+      const blockedAck = await emitWithAck<ConversationMessageAck | ServerAckError>(
+        senderSocket,
+        "conversation:message:create",
+        {
+          clientMessageId: randomUUID(),
+          content: "This realtime message should be blocked.",
+          conversationId
+        }
+      );
+
+      expect("error" in blockedAck).toBe(true);
+      expect((blockedAck as ServerAckError).error.code).toBe("MESSAGE_RATE_LIMITED");
+
+      await waitForTick();
+
+      expect(blockedEventReceived).toBe(false);
+
+      const persistedMessageCount = await prisma.message.count({
+        where: {
+          senderId: sender.user.id
+        }
+      });
+
+      expect(persistedMessageCount).toBe(MESSAGE_RATE_LIMIT_MAX);
+
+      const auditLogs = await prisma.auditLog.findMany({
+        where: {
+          action: "MESSAGE_RATE_LIMIT_TRIGGERED"
+        }
+      });
+
+      expect(auditLogs).toHaveLength(1);
+      expect(auditLogs[0]).toMatchObject({
+        action: "MESSAGE_RATE_LIMIT_TRIGGERED",
+        actorId: sender.user.id,
+        entityId: conversationId,
+        entityType: "CONVERSATION"
+      });
+      expect(auditLogs[0]?.actorMetadata).toMatchObject({
+        conversationId,
+        rateLimitMax: MESSAGE_RATE_LIMIT_MAX,
+        recentMessageCount: MESSAGE_RATE_LIMIT_MAX,
+        transport: "REALTIME"
+      });
     } finally {
       senderSocket.close();
       recipientSocket.close();

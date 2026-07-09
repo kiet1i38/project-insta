@@ -4,6 +4,7 @@ import { app } from "../../app.js";
 import { prisma } from "../../db/prisma.js";
 import { resetDatabaseTables } from "../../test/testDatabase.js";
 import { hashPassword } from "../auth/password.js";
+import { MESSAGE_RATE_LIMIT_MAX } from "./messages.service.js";
 
 const allowedOrigin = "http://localhost:5173";
 
@@ -618,6 +619,76 @@ describe("messages conversations API", () => {
     expect(senderReadState[0]?.lastReadMessageId).toBe(
       response.body.message.id as string
     );
+  });
+
+  test("POST /api/v1/conversations/:conversationId/messages rate limits burst sends and records an audit entry", async () => {
+    const viewer = await createUserFixture({
+      email: "viewer-rate-limit@example.com",
+      username: "viewer_rate_limit"
+    });
+    const peer = await createUserFixture({
+      email: "peer-rate-limit@example.com",
+      username: "peer_rate_limit"
+    });
+    const accessToken = await loginAndGetAccessToken(
+      viewer.user.email,
+      viewer.password
+    );
+    const conversation = await insertDirectConversation({
+      userAId: viewer.user.id,
+      userBId: peer.user.id
+    });
+
+    for (let index = 0; index < MESSAGE_RATE_LIMIT_MAX; index += 1) {
+      await insertMessage({
+        content: `Burst message ${index + 1}`,
+        conversationId: conversation.conversationId,
+        createdAt: new Date(Date.now() - 500 + index),
+        senderId: viewer.user.id
+      });
+    }
+
+    const response = await request(app)
+      .post(`/api/v1/conversations/${conversation.conversationId}/messages`)
+      .set("Origin", allowedOrigin)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .set("User-Agent", "CloneInsta burst test")
+      .send({
+        content: "This message should be rate limited."
+      });
+
+    expect(response.status).toBe(429);
+    expect(response.headers["access-control-allow-origin"]).toBe(allowedOrigin);
+    expect(response.body.error.code).toBe("MESSAGE_RATE_LIMITED");
+
+    const persistedMessageCount = await prisma.message.count({
+      where: {
+        senderId: viewer.user.id
+      }
+    });
+
+    expect(persistedMessageCount).toBe(MESSAGE_RATE_LIMIT_MAX);
+
+    const auditLogs = await prisma.auditLog.findMany({
+      where: {
+        action: "MESSAGE_RATE_LIMIT_TRIGGERED"
+      }
+    });
+
+    expect(auditLogs).toHaveLength(1);
+    expect(auditLogs[0]).toMatchObject({
+      action: "MESSAGE_RATE_LIMIT_TRIGGERED",
+      actorId: viewer.user.id,
+      entityId: conversation.conversationId,
+      entityType: "CONVERSATION",
+      userAgent: "CloneInsta burst test"
+    });
+    expect(auditLogs[0]?.actorMetadata).toMatchObject({
+      conversationId: conversation.conversationId,
+      rateLimitMax: MESSAGE_RATE_LIMIT_MAX,
+      recentMessageCount: MESSAGE_RATE_LIMIT_MAX,
+      transport: "REST"
+    });
   });
 
   test("POST /api/v1/conversations/:conversationId/read marks the target message as read and clears unread count", async () => {

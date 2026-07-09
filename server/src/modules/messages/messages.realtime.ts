@@ -199,6 +199,14 @@ export async function initializeMessagesRealtimeConnection(
       try {
         const { clientMessageId, content, conversationId } = parsedInput.data;
         const response = await createConversationMessageRealtime({
+          auditContext: {
+            ipAddress: socket.handshake.address || null,
+            transport: "REALTIME",
+            userAgent:
+              typeof socket.handshake.headers["user-agent"] === "string"
+                ? socket.handshake.headers["user-agent"]
+                : null
+          },
           body: {
             clientMessageId,
             content

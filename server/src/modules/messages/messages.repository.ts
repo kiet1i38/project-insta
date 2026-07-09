@@ -319,8 +319,16 @@ export async function createConversationMessageRecord(input: {
   clientMessageId?: string;
   content: string;
   conversationId: string;
+  rateLimit?: {
+    createdAfter: Date;
+    max: number;
+  };
   senderId: string;
-}): Promise<{ created: boolean; message: ThreadMessageRecord }> {
+}): Promise<
+  | { state: "created"; message: ThreadMessageRecord }
+  | { state: "existing"; message: ThreadMessageRecord }
+  | { recentMessageCount: number; state: "rate_limited" }
+> {
   return prisma.$transaction(async (tx) => {
     if (input.clientMessageId) {
       const existingMessage = await tx.message.findFirst({
@@ -334,8 +342,26 @@ export async function createConversationMessageRecord(input: {
 
       if (existingMessage) {
         return {
-          created: false,
+          state: "existing" as const,
           message: existingMessage
+        };
+      }
+    }
+
+    if (input.rateLimit) {
+      const recentMessageCount = await tx.message.count({
+        where: {
+          createdAt: {
+            gte: input.rateLimit.createdAfter
+          },
+          senderId: input.senderId
+        }
+      });
+
+      if (recentMessageCount >= input.rateLimit.max) {
+        return {
+          recentMessageCount,
+          state: "rate_limited" as const
         };
       }
     }
@@ -371,7 +397,7 @@ export async function createConversationMessageRecord(input: {
       }
 
       return {
-        created: false,
+        state: "existing" as const,
         message: existingMessage
       };
     }
@@ -405,9 +431,31 @@ export async function createConversationMessageRecord(input: {
     });
 
     return {
-      created: true,
+      state: "created" as const,
       message
     };
+  });
+}
+
+export async function createConversationAuditLogRecord(input: {
+  action: string;
+  actorId: string;
+  actorMetadata: Prisma.InputJsonValue;
+  entityId: string;
+  entityType: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+}) {
+  return prisma.auditLog.create({
+    data: {
+      action: input.action,
+      actorId: input.actorId,
+      actorMetadata: input.actorMetadata,
+      entityId: input.entityId,
+      entityType: input.entityType,
+      ipAddress: input.ipAddress,
+      userAgent: input.userAgent
+    }
   });
 }
 

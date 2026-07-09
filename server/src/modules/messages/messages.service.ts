@@ -1,3 +1,4 @@
+import type { Prisma } from "../../generated/prisma/client.js";
 import { AppError } from "../../lib/appError.js";
 import type {
   CreateConversationMessageInput,
@@ -7,6 +8,7 @@ import type {
 } from "./messages.schema.js";
 import {
   countUnreadMessagesForConversation,
+  createConversationAuditLogRecord,
   createConversationMessageRecord,
   createDirectConversationRecord,
   findActiveConversationPeerById,
@@ -21,6 +23,9 @@ import {
   type ThreadMessageRecord,
   upsertConversationReadState
 } from "./messages.repository.js";
+
+export const MESSAGE_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+export const MESSAGE_RATE_LIMIT_MAX = 20;
 
 export type ConversationPeerDto = {
   avatarUrl: string | null;
@@ -85,6 +90,12 @@ export type ConversationReadStateDto = {
   lastReadMessageId: string | null;
 };
 
+type ConversationMessageAuditContext = {
+  ipAddress: string | null;
+  transport: "REST" | "REALTIME";
+  userAgent: string | null;
+};
+
 function buildDirectConversationKey(userAId: string, userBId: string): string {
   return [userAId, userBId].sort().join(":");
 }
@@ -99,6 +110,14 @@ function createConversationNotFoundError(): AppError {
 
 function createMessageNotFoundError(): AppError {
   return new AppError(404, "MESSAGE_NOT_FOUND", "Message not found.");
+}
+
+function createMessageRateLimitedError(): AppError {
+  return new AppError(
+    429,
+    "MESSAGE_RATE_LIMITED",
+    "Too many messages sent recently. Please try again later."
+  );
 }
 
 function createSelfConversationError(): AppError {
@@ -217,6 +236,83 @@ function toConversationReadStateDto(
     conversationId,
     lastReadAt: input.lastReadAt,
     lastReadMessageId: input.lastReadMessageId
+  };
+}
+
+function getConversationParticipantUserIds(
+  participants: ConversationSummaryRecord["participants"]
+) {
+  return participants.map((participant) => participant.userId);
+}
+
+async function createConversationMessageRateLimitAuditLog(input: {
+  auditContext: ConversationMessageAuditContext;
+  conversationId: string;
+  recentMessageCount: number;
+  viewerId: string;
+}) {
+  const actorMetadata = {
+    conversationId: input.conversationId,
+    rateLimitMax: MESSAGE_RATE_LIMIT_MAX,
+    rateLimitWindowMs: MESSAGE_RATE_LIMIT_WINDOW_MS,
+    recentMessageCount: input.recentMessageCount,
+    transport: input.auditContext.transport
+  } satisfies Prisma.InputJsonValue;
+
+  await createConversationAuditLogRecord({
+    action: "MESSAGE_RATE_LIMIT_TRIGGERED",
+    actorId: input.viewerId,
+    actorMetadata,
+    entityId: input.conversationId,
+    entityType: "CONVERSATION",
+    ipAddress: input.auditContext.ipAddress,
+    userAgent: input.auditContext.userAgent
+  });
+}
+
+async function createConversationMessageInternal(input: {
+  auditContext: ConversationMessageAuditContext;
+  body: CreateConversationMessageInput & {
+    clientMessageId?: string;
+  };
+  conversationId: string;
+  viewerId: string;
+}): Promise<{
+  created: boolean;
+  message: ConversationMessageDto;
+  participantUserIds: string[];
+}> {
+  const conversation = await getConversationSummaryRecordOrThrow({
+    conversationId: input.conversationId,
+    viewerId: input.viewerId
+  });
+  const createdMessage = await createConversationMessageRecord({
+    clientMessageId: input.body.clientMessageId,
+    content: input.body.content,
+    conversationId: input.conversationId,
+    rateLimit: {
+      createdAfter: new Date(Date.now() - MESSAGE_RATE_LIMIT_WINDOW_MS),
+      max: MESSAGE_RATE_LIMIT_MAX
+    },
+    senderId: input.viewerId
+  });
+
+  if (createdMessage.state === "rate_limited") {
+    await createConversationMessageRateLimitAuditLog({
+      auditContext: input.auditContext,
+      conversationId: input.conversationId,
+      recentMessageCount: createdMessage.recentMessageCount,
+      viewerId: input.viewerId
+    });
+    throw createMessageRateLimitedError();
+  }
+
+  return {
+    created: createdMessage.state === "created",
+    message: toConversationMessageDto(createdMessage.message),
+    participantUserIds: getConversationParticipantUserIds(
+      conversation.participants
+    )
   };
 }
 
@@ -364,25 +460,23 @@ export async function getConversationMessages(input: {
 }
 
 export async function createConversationMessage(input: {
+  auditContext: ConversationMessageAuditContext;
   body: CreateConversationMessageInput;
   conversationId: string;
   viewerId: string;
 }): Promise<ConversationMessageDto> {
-  await getConversationSummaryRecordOrThrow({
+  const createdMessage = await createConversationMessageInternal({
+    auditContext: input.auditContext,
+    body: input.body,
     conversationId: input.conversationId,
     viewerId: input.viewerId
   });
 
-  const createdMessage = await createConversationMessageRecord({
-    content: input.body.content,
-    conversationId: input.conversationId,
-    senderId: input.viewerId
-  });
-
-  return toConversationMessageDto(createdMessage.message);
+  return createdMessage.message;
 }
 
 export async function createConversationMessageRealtime(input: {
+  auditContext: ConversationMessageAuditContext;
   body: CreateConversationMessageInput & { clientMessageId: string };
   conversationId: string;
   viewerId: string;
@@ -391,22 +485,12 @@ export async function createConversationMessageRealtime(input: {
   message: ConversationMessageDto;
   participantUserIds: string[];
 }> {
-  const conversation = await getConversationSummaryRecordOrThrow({
+  return createConversationMessageInternal({
+    auditContext: input.auditContext,
+    body: input.body,
     conversationId: input.conversationId,
     viewerId: input.viewerId
   });
-  const createdMessage = await createConversationMessageRecord({
-    clientMessageId: input.body.clientMessageId,
-    content: input.body.content,
-    conversationId: input.conversationId,
-    senderId: input.viewerId
-  });
-
-  return {
-    created: createdMessage.created,
-    message: toConversationMessageDto(createdMessage.message),
-    participantUserIds: conversation.participants.map((participant) => participant.userId)
-  };
 }
 
 export async function markConversationRead(input: {

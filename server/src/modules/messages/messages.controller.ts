@@ -203,6 +203,11 @@ export const createConversationMessageController: RequestHandler = async (
     }
 
     const message = await createConversationMessage({
+      auditContext: {
+        ipAddress: req.ip || null,
+        transport: "REST",
+        userAgent: req.get("user-agent") ?? null
+      },
       body: parsedBody.data,
       conversationId: parsedParams.data.conversationId,
       viewerId: req.authUser.id
