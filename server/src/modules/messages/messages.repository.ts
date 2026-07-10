@@ -54,6 +54,7 @@ const buildConversationSummarySelect = (viewerId: string) =>
     updatedAt: true,
     participants: {
       select: {
+        requestState: true,
         user: {
           select: buildConversationSummaryPeerSelect(viewerId)
         },
@@ -96,7 +97,8 @@ export type ThreadMessageRecord = Prisma.MessageGetPayload<{
   select: typeof threadMessageSelect;
 }>;
 
-const activeConversationPeerSelect = conversationPeerSelect satisfies Prisma.UserSelect;
+const activeConversationPeerSelect =
+  conversationPeerSelect satisfies Prisma.UserSelect;
 
 export type ActiveConversationPeerRecord = Prisma.UserGetPayload<{
   select: typeof activeConversationPeerSelect;
@@ -107,6 +109,14 @@ function buildRequestConversationWhereClause(
 ): Prisma.ConversationWhereInput {
   return {
     AND: [
+      {
+        participants: {
+          some: {
+            requestState: "PENDING",
+            userId: viewerId
+          }
+        }
+      },
       {
         messages: {
           some: {
@@ -137,6 +147,19 @@ function buildRequestConversationWhereClause(
         }
       }
     ]
+  };
+}
+
+function buildDeclinedConversationWhereClause(
+  viewerId: string
+): Prisma.ConversationWhereInput {
+  return {
+    participants: {
+      some: {
+        requestState: "DECLINED",
+        userId: viewerId
+      }
+    }
   };
 }
 
@@ -270,17 +293,22 @@ export async function createDirectConversationRecord(input: {
   });
 }
 
-export async function findConversationRoomIdsForUser(userId: string): Promise<string[]> {
-  const conversationParticipants = await prisma.conversationParticipant.findMany({
-    select: {
-      conversationId: true
-    },
-    where: {
-      userId
-    }
-  });
+export async function findConversationRoomIdsForUser(
+  userId: string
+): Promise<string[]> {
+  const conversationParticipants =
+    await prisma.conversationParticipant.findMany({
+      select: {
+        conversationId: true
+      },
+      where: {
+        userId
+      }
+    });
 
-  return conversationParticipants.map((participant) => participant.conversationId);
+  return conversationParticipants.map(
+    (participant) => participant.conversationId
+  );
 }
 
 export async function findConversationSummariesForUser(input: {
@@ -312,6 +340,9 @@ export async function findConversationSummariesForUser(input: {
               userId: input.viewerId
             }
           }
+        },
+        {
+          NOT: buildDeclinedConversationWhereClause(input.viewerId)
         },
         folderFilter,
         ...(paginationFilter ? [paginationFilter] : [])
@@ -489,6 +520,19 @@ export async function createConversationMessageRecord(input: {
       }
     });
 
+    await tx.conversationParticipant.updateMany({
+      data: {
+        requestState: "PENDING"
+      },
+      where: {
+        conversationId: input.conversationId,
+        requestState: "DECLINED",
+        userId: {
+          not: input.senderId
+        }
+      }
+    });
+
     await tx.conversationReadState.upsert({
       create: {
         conversationId: input.conversationId,
@@ -563,12 +607,31 @@ export async function upsertConversationReadState(input: {
   });
 }
 
+export async function updateConversationParticipantRequestState(input: {
+  conversationId: string;
+  requestState: "ACCEPTED" | "PENDING" | "DECLINED";
+  userId: string;
+}) {
+  return prisma.conversationParticipant.update({
+    data: {
+      requestState: input.requestState
+    },
+    where: {
+      conversationId_userId: {
+        conversationId: input.conversationId,
+        userId: input.userId
+      }
+    }
+  });
+}
+
 export function isConversationDirectKeyUniqueConflict(error: unknown): boolean {
   return (
     error instanceof Prisma.PrismaClientKnownRequestError &&
     error.code === "P2002" &&
     (error.meta?.modelName === "Conversation" ||
-      (Array.isArray(error.meta?.target) && error.meta.target.includes("directKey")))
+      (Array.isArray(error.meta?.target) &&
+        error.meta.target.includes("directKey")))
   );
 }
 

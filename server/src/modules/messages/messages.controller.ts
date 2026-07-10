@@ -9,21 +9,27 @@ import {
   markConversationReadSchema
 } from "./messages.schema.js";
 import {
+  acceptConversationRequest,
   createConversationMessage,
   createDirectConversation,
+  declineConversationRequest,
   getConversationMessages,
   listConversations,
   markConversationRead
 } from "./messages.service.js";
 
-function toValidationDetails(issues: Array<{ message: string; path: PropertyKey[] }>) {
+function toValidationDetails(
+  issues: Array<{ message: string; path: PropertyKey[] }>
+) {
   return issues.map((issue) => ({
     message: issue.message,
     path: issue.path.join(".")
   }));
 }
 
-function parseConversationRouteParams(rawConversationId: string | string[] | undefined) {
+function parseConversationRouteParams(
+  rawConversationId: string | string[] | undefined
+) {
   const conversationId = Array.isArray(rawConversationId)
     ? rawConversationId[0]
     : rawConversationId;
@@ -268,6 +274,90 @@ export const markConversationReadController: RequestHandler = async (
 
     res.status(200).json({
       readState,
+      requestId: req.requestId
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const acceptConversationRequestController: RequestHandler = async (
+  req,
+  res,
+  next
+) => {
+  const parsedParams = parseConversationRouteParams(req.params.conversationId);
+
+  if (!parsedParams.success) {
+    res.status(400).json({
+      error: {
+        code: "VALIDATION_ERROR",
+        details: toValidationDetails(parsedParams.error.issues),
+        message: "Invalid route parameters."
+      },
+      requestId: req.requestId
+    });
+    return;
+  }
+
+  try {
+    if (!req.authUser) {
+      throw createUnauthorizedError();
+    }
+
+    const conversation = await acceptConversationRequest({
+      auditContext: {
+        ipAddress: req.ip || null,
+        userAgent: req.get("user-agent") ?? null
+      },
+      conversationId: parsedParams.data.conversationId,
+      viewerId: req.authUser.id
+    });
+
+    res.status(200).json({
+      conversation,
+      requestId: req.requestId
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const declineConversationRequestController: RequestHandler = async (
+  req,
+  res,
+  next
+) => {
+  const parsedParams = parseConversationRouteParams(req.params.conversationId);
+
+  if (!parsedParams.success) {
+    res.status(400).json({
+      error: {
+        code: "VALIDATION_ERROR",
+        details: toValidationDetails(parsedParams.error.issues),
+        message: "Invalid route parameters."
+      },
+      requestId: req.requestId
+    });
+    return;
+  }
+
+  try {
+    if (!req.authUser) {
+      throw createUnauthorizedError();
+    }
+
+    await declineConversationRequest({
+      auditContext: {
+        ipAddress: req.ip || null,
+        userAgent: req.get("user-agent") ?? null
+      },
+      conversationId: parsedParams.data.conversationId,
+      viewerId: req.authUser.id
+    });
+
+    res.status(200).json({
+      conversationId: parsedParams.data.conversationId,
       requestId: req.requestId
     });
   } catch (error) {

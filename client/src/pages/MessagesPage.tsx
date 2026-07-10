@@ -8,8 +8,10 @@ import {
 } from "react-router-dom";
 import {
   ApiError,
+  acceptConversationRequest,
   createConversationMessage,
   createDirectConversation,
+  declineConversationRequest,
   getConversationMessages,
   getConversations,
   markConversationRead,
@@ -26,6 +28,7 @@ type MessagesFolderView = "inbox" | "requests";
 
 type MessagesThreadState = {
   conversation: {
+    folder: ConversationSummary["folder"];
     id: string;
     peer: ConversationSummary["peer"];
   };
@@ -120,7 +123,8 @@ function mergeConversations(
   incomingConversations: ConversationSummary[]
 ): ConversationSummary[] {
   return incomingConversations.reduce(
-    (accumulator, conversation) => upsertConversation(accumulator, conversation),
+    (accumulator, conversation) =>
+      upsertConversation(accumulator, conversation),
     currentConversations
   );
 }
@@ -135,7 +139,9 @@ function prependOlderMessages(
   currentMessages: ConversationMessage[],
   incomingMessages: ConversationMessage[]
 ): ConversationMessage[] {
-  const currentMessageIds = new Set(currentMessages.map((message) => message.id));
+  const currentMessageIds = new Set(
+    currentMessages.map((message) => message.id)
+  );
   const olderMessages = reverseMessagesForThread(incomingMessages).filter(
     (message) => !currentMessageIds.has(message.id)
   );
@@ -198,10 +204,13 @@ export function MessagesPage() {
   const [searchParams] = useSearchParams();
   const { conversationId } = useParams();
   const { accessToken, user } = useAuthSession();
-  const realtimeClientRef =
-    useRef<ReturnType<typeof createMessagesRealtimeClient> | null>(null);
+  const realtimeClientRef = useRef<ReturnType<
+    typeof createMessagesRealtimeClient
+  > | null>(null);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
-  const [conversationError, setConversationError] = useState<string | null>(null);
+  const [conversationError, setConversationError] = useState<string | null>(
+    null
+  );
   const [draft, setDraft] = useState("");
   const [draftError, setDraftError] = useState<string | null>(null);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
@@ -212,6 +221,7 @@ export function MessagesPage() {
   const [isLoadingThread, setIsLoadingThread] = useState(false);
   const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [isRespondingToRequest, setIsRespondingToRequest] = useState(false);
   const [thread, setThread] = useState<MessagesThreadState | null>(null);
   const [threadError, setThreadError] = useState<string | null>(null);
   const [conversationsPageInfo, setConversationsPageInfo] = useState<{
@@ -279,7 +289,10 @@ export function MessagesPage() {
   useEffect(() => {
     const participantUserId = requestedUserId;
 
-    if (typeof participantUserId !== "string" || participantUserId.length === 0) {
+    if (
+      typeof participantUserId !== "string" ||
+      participantUserId.length === 0
+    ) {
       return;
     }
 
@@ -351,7 +364,8 @@ export function MessagesPage() {
       },
       onConversationMessageCreated: ({ message }) => {
         setThread((currentThread) =>
-          currentThread && currentThread.conversation.id === message.conversationId
+          currentThread &&
+          currentThread.conversation.id === message.conversationId
             ? {
                 ...currentThread,
                 messages: appendMessage(currentThread.messages, message)
@@ -370,19 +384,24 @@ export function MessagesPage() {
             return currentConversations;
           }
 
-          return syncConversationForFolder(currentConversations, {
-            folder:
-              existingConversation?.folder ??
-              (message.sender.id === user.id ? "INBOX" : "REQUESTS"),
-            id: message.conversationId,
-            lastMessage: toConversationPreview(message),
-            peer,
-            unreadCount:
-              message.sender.id === user.id || message.conversationId === conversationId
-                ? 0
-                : (existingConversation?.unreadCount ?? 0) + 1,
-            updatedAt: message.createdAt
-          }, activeFolder);
+          return syncConversationForFolder(
+            currentConversations,
+            {
+              folder:
+                existingConversation?.folder ??
+                (message.sender.id === user.id ? "INBOX" : "REQUESTS"),
+              id: message.conversationId,
+              lastMessage: toConversationPreview(message),
+              peer,
+              unreadCount:
+                message.sender.id === user.id ||
+                message.conversationId === conversationId
+                  ? 0
+                  : (existingConversation?.unreadCount ?? 0) + 1,
+              updatedAt: message.createdAt
+            },
+            activeFolder
+          );
         });
 
         if (
@@ -426,7 +445,11 @@ export function MessagesPage() {
           })
           .catch(() => undefined);
       },
-      onConversationReadUpdated: ({ conversationId: readConversationId, readState, userId }) => {
+      onConversationReadUpdated: ({
+        conversationId: readConversationId,
+        readState,
+        userId
+      }) => {
         if (userId !== user.id) {
           return;
         }
@@ -527,9 +550,12 @@ export function MessagesPage() {
           return;
         }
 
-        const readResponse = await markConversationRead(resolvedConversationId, {
-          messageId: unreadMessageId
-        });
+        const readResponse = await markConversationRead(
+          resolvedConversationId,
+          {
+            messageId: unreadMessageId
+          }
+        );
 
         if (!isActive) {
           return;
@@ -580,7 +606,10 @@ export function MessagesPage() {
   }, [conversationId, user]);
 
   async function handleLoadMoreConversations(): Promise<void> {
-    if (!conversationsPageInfo?.hasNextPage || !conversationsPageInfo.nextCursor) {
+    if (
+      !conversationsPageInfo?.hasNextPage ||
+      !conversationsPageInfo.nextCursor
+    ) {
       return;
     }
 
@@ -611,7 +640,11 @@ export function MessagesPage() {
   }
 
   async function handleLoadOlderMessages(): Promise<void> {
-    if (!conversationId || !thread?.pageInfo.hasNextPage || !thread.pageInfo.nextCursor) {
+    if (
+      !conversationId ||
+      !thread?.pageInfo.hasNextPage ||
+      !thread.pageInfo.nextCursor
+    ) {
       return;
     }
 
@@ -693,14 +726,18 @@ export function MessagesPage() {
           : currentThread
       );
       setConversations((currentConversations) =>
-        syncConversationForFolder(currentConversations, {
-          folder: "INBOX",
-          id: conversationId,
-          lastMessage: toConversationPreview(response.message),
-          peer: thread.conversation.peer,
-          unreadCount: 0,
-          updatedAt: response.message.createdAt
-        }, activeFolder)
+        syncConversationForFolder(
+          currentConversations,
+          {
+            folder: "INBOX",
+            id: conversationId,
+            lastMessage: toConversationPreview(response.message),
+            peer: thread.conversation.peer,
+            unreadCount: 0,
+            updatedAt: response.message.createdAt
+          },
+          activeFolder
+        )
       );
       setDraft("");
     } catch (error) {
@@ -715,6 +752,76 @@ export function MessagesPage() {
     }
   }
 
+  async function handleAcceptMessageRequest(): Promise<void> {
+    if (!conversationId || !thread) {
+      return;
+    }
+
+    setIsRespondingToRequest(true);
+    setThreadError(null);
+
+    try {
+      const response = await acceptConversationRequest(conversationId);
+
+      setThread((currentThread) =>
+        currentThread
+          ? {
+              ...currentThread,
+              conversation: {
+                folder: response.conversation.folder,
+                id: response.conversation.id,
+                peer: response.conversation.peer
+              }
+            }
+          : currentThread
+      );
+      setConversations((currentConversations) =>
+        currentConversations.filter(
+          (conversation) => conversation.id !== response.conversation.id
+        )
+      );
+      navigate(`/messages/${response.conversation.id}`, { replace: true });
+    } catch (error) {
+      setThreadError(
+        getErrorMessage(
+          error,
+          "Could not accept this message request right now. Please try again."
+        )
+      );
+    } finally {
+      setIsRespondingToRequest(false);
+    }
+  }
+
+  async function handleDeclineMessageRequest(): Promise<void> {
+    if (!conversationId) {
+      return;
+    }
+
+    setIsRespondingToRequest(true);
+    setThreadError(null);
+
+    try {
+      await declineConversationRequest(conversationId);
+      setConversations((currentConversations) =>
+        currentConversations.filter(
+          (conversation) => conversation.id !== conversationId
+        )
+      );
+      setThread(null);
+      navigate("/messages?view=requests", { replace: true });
+    } catch (error) {
+      setThreadError(
+        getErrorMessage(
+          error,
+          "Could not decline this message request right now. Please try again."
+        )
+      );
+    } finally {
+      setIsRespondingToRequest(false);
+    }
+  }
+
   return (
     <section
       className="panel messages-page"
@@ -722,19 +829,19 @@ export function MessagesPage() {
     >
       <div className="messages-layout">
         <aside className="messages-sidebar">
-            <div className="messages-sidebar-header">
-              <div className="auth-copy messages-hero-copy">
-                <p className="messages-kicker">Slice 9C</p>
-                <h2>Messages</h2>
-                <p>
-                  Keep the 1:1 inbox and thread view on top of the verified chat
-                  backend.
-                </p>
-              </div>
-              <Link className="secondary-inline-link" to="/search">
-                Search people
-              </Link>
+          <div className="messages-sidebar-header">
+            <div className="auth-copy messages-hero-copy">
+              <p className="messages-kicker">Slice 9C</p>
+              <h2>Messages</h2>
+              <p>
+                Keep the 1:1 inbox and thread view on top of the verified chat
+                backend.
+              </p>
             </div>
+            <Link className="secondary-inline-link" to="/search">
+              Search people
+            </Link>
+          </div>
 
           <nav className="messages-view-toggle" aria-label="Messages folders">
             <Link
@@ -770,14 +877,18 @@ export function MessagesPage() {
           {isCreatingConversation ? (
             <div className="messages-empty-state">
               <h3>Opening conversation</h3>
-              <p>Creating or reusing the direct chat before the thread opens.</p>
+              <p>
+                Creating or reusing the direct chat before the thread opens.
+              </p>
             </div>
           ) : null}
 
           {isLoadingConversations ? (
             <div className="messages-empty-state">
               <h3>Loading inbox</h3>
-              <p>Pulling the latest direct conversations from the protected API.</p>
+              <p>
+                Pulling the latest direct conversations from the protected API.
+              </p>
             </div>
           ) : conversations.length === 0 ? (
             <div className="messages-empty-state">
@@ -809,7 +920,11 @@ export function MessagesPage() {
                         : "messages-conversation-card"
                     }
                     key={conversation.id}
-                    to={`/messages/${conversation.id}`}
+                    to={
+                      activeFolder === "requests"
+                        ? `/messages/${conversation.id}?view=requests`
+                        : `/messages/${conversation.id}`
+                    }
                   >
                     {conversation.peer.avatarUrl ? (
                       <img
@@ -837,12 +952,15 @@ export function MessagesPage() {
                             : "New"}
                         </span>
                       </div>
-                      <p className="profile-handle">@{conversation.peer.username}</p>
+                      <p className="profile-handle">
+                        @{conversation.peer.username}
+                      </p>
                       {conversation.folder === "REQUESTS" ? (
                         <p className="messages-request-pill">Request</p>
                       ) : null}
                       <p className="messages-conversation-preview">
-                        {conversation.lastMessage?.content ?? "No messages yet."}
+                        {conversation.lastMessage?.content ??
+                          "No messages yet."}
                       </p>
                     </div>
 
@@ -885,7 +1003,9 @@ export function MessagesPage() {
           ) : isLoadingThread ? (
             <div className="messages-thread-empty-state">
               <h3>Loading thread</h3>
-              <p>Opening the selected conversation and recent message history.</p>
+              <p>
+                Opening the selected conversation and recent message history.
+              </p>
             </div>
           ) : threadError ? (
             <div className="messages-thread-empty-state">
@@ -924,7 +1044,11 @@ export function MessagesPage() {
 
                 <Link
                   className="secondary-inline-link messages-thread-back-link"
-                  to="/messages"
+                  to={
+                    thread.conversation.folder === "REQUESTS"
+                      ? "/messages?view=requests"
+                      : "/messages"
+                  }
                 >
                   Back to inbox
                 </Link>
@@ -937,7 +1061,9 @@ export function MessagesPage() {
                   onClick={() => void handleLoadOlderMessages()}
                   type="button"
                 >
-                  {isLoadingOlderMessages ? "Loading..." : "Load older messages"}
+                  {isLoadingOlderMessages
+                    ? "Loading..."
+                    : "Load older messages"}
                 </button>
               ) : null}
 
@@ -983,41 +1109,76 @@ export function MessagesPage() {
                 </ol>
               )}
 
-              <form
-                className="messages-compose-form"
-                noValidate
-                onSubmit={(event) => void handleSubmitMessage(event)}
-              >
-                <label className="form-field" htmlFor="messages-compose-input">
-                  <span>Message</span>
-                  <input
-                    id="messages-compose-input"
-                    onChange={(event) => {
-                      setDraft(event.currentTarget.value);
-                      setDraftError(null);
-                    }}
-                    placeholder={`Message ${getPeerLabel(thread.conversation.peer)}`}
-                    type="text"
-                    value={draft}
-                  />
-                </label>
-
-                {draftError ? (
-                  <p className="field-error" role="status">
-                    {draftError}
+              {thread.conversation.folder === "REQUESTS" ? (
+                <section
+                  className="messages-request-actions"
+                  aria-label="Message request actions"
+                >
+                  <p>
+                    Accept this request to move the conversation into your inbox
+                    and start replying.
                   </p>
-                ) : null}
-
-                <div className="messages-compose-actions">
-                  <button
-                    className="primary-button"
-                    disabled={isSendingMessage}
-                    type="submit"
+                  <div className="messages-compose-actions">
+                    <button
+                      className="primary-button"
+                      disabled={isRespondingToRequest}
+                      onClick={() => void handleAcceptMessageRequest()}
+                      type="button"
+                    >
+                      {isRespondingToRequest
+                        ? "Accepting..."
+                        : "Accept request"}
+                    </button>
+                    <button
+                      className="secondary-button"
+                      disabled={isRespondingToRequest}
+                      onClick={() => void handleDeclineMessageRequest()}
+                      type="button"
+                    >
+                      Decline request
+                    </button>
+                  </div>
+                </section>
+              ) : (
+                <form
+                  className="messages-compose-form"
+                  noValidate
+                  onSubmit={(event) => void handleSubmitMessage(event)}
+                >
+                  <label
+                    className="form-field"
+                    htmlFor="messages-compose-input"
                   >
-                    {isSendingMessage ? "Sending..." : "Send message"}
-                  </button>
-                </div>
-              </form>
+                    <span>Message</span>
+                    <input
+                      id="messages-compose-input"
+                      onChange={(event) => {
+                        setDraft(event.currentTarget.value);
+                        setDraftError(null);
+                      }}
+                      placeholder={`Message ${getPeerLabel(thread.conversation.peer)}`}
+                      type="text"
+                      value={draft}
+                    />
+                  </label>
+
+                  {draftError ? (
+                    <p className="field-error" role="status">
+                      {draftError}
+                    </p>
+                  ) : null}
+
+                  <div className="messages-compose-actions">
+                    <button
+                      className="primary-button"
+                      disabled={isSendingMessage}
+                      type="submit"
+                    >
+                      {isSendingMessage ? "Sending..." : "Send message"}
+                    </button>
+                  </div>
+                </form>
+              )}
             </>
           ) : null}
         </section>

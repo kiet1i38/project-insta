@@ -238,6 +238,7 @@ export type ConversationReadState = {
 
 export type ConversationThreadResponse = {
   conversation: {
+    folder: "INBOX" | "REQUESTS";
     id: string;
     peer: ConversationPeer;
   };
@@ -494,9 +495,7 @@ export class ApiError extends Error {
 }
 
 const csrfCookieName =
-  import.meta.env.PROD === true
-    ? "__Host-cloneinsta-csrf"
-    : "cloneinsta_csrf";
+  import.meta.env.PROD === true ? "__Host-cloneinsta-csrf" : "cloneinsta_csrf";
 
 function expireCookie(name: string): void {
   document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
@@ -558,8 +557,7 @@ async function requestJson<T>(
   }
 
   const response = await fetch(`${apiBaseUrl}${path}`, {
-    body:
-      options.body === undefined ? undefined : JSON.stringify(options.body),
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
     credentials: "include",
     headers,
     method: options.method ?? "GET"
@@ -739,9 +737,7 @@ export async function getPostDetail(
   );
 }
 
-export async function likePost(
-  postId: string
-): Promise<PostLikeStateResponse> {
+export async function likePost(postId: string): Promise<PostLikeStateResponse> {
   return requestJson<PostLikeStateResponse>(
     `/posts/${encodeURIComponent(postId)}/likes`,
     {
@@ -815,7 +811,9 @@ export async function createPost(
     method: "POST"
   });
 
-  const jsonBody = await parseJsonBody<ApiErrorBody | CreatePostResponse>(response);
+  const jsonBody = await parseJsonBody<ApiErrorBody | CreatePostResponse>(
+    response
+  );
 
   if (!response.ok) {
     const errorBody = jsonBody as ApiErrorBody | null;
@@ -852,10 +850,13 @@ export async function searchUsers(
     params.set("cursor", input.cursor);
   }
 
-  return requestJson<SearchUsersResponse>(`/users/search?${params.toString()}`, {
-    includeAccessToken: true,
-    method: "GET"
-  });
+  return requestJson<SearchUsersResponse>(
+    `/users/search?${params.toString()}`,
+    {
+      includeAccessToken: true,
+      method: "GET"
+    }
+  );
 }
 
 export async function createDirectConversation(
@@ -947,6 +948,36 @@ export async function markConversationRead(
     requestId: string;
   }>(`/conversations/${encodeURIComponent(conversationId)}/read`, {
     body: input,
+    includeAccessToken: true,
+    method: "POST"
+  });
+}
+
+export async function acceptConversationRequest(
+  conversationId: string
+): Promise<{
+  conversation: ConversationSummary;
+  requestId: string;
+}> {
+  return requestJson<{
+    conversation: ConversationSummary;
+    requestId: string;
+  }>(`/conversations/${encodeURIComponent(conversationId)}/request/accept`, {
+    includeAccessToken: true,
+    method: "POST"
+  });
+}
+
+export async function declineConversationRequest(
+  conversationId: string
+): Promise<{
+  conversationId: string;
+  requestId: string;
+}> {
+  return requestJson<{
+    conversationId: string;
+    requestId: string;
+  }>(`/conversations/${encodeURIComponent(conversationId)}/request/decline`, {
     includeAccessToken: true,
     method: "POST"
   });

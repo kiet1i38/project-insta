@@ -8,14 +8,16 @@ import { MESSAGE_RATE_LIMIT_MAX } from "./messages.service.js";
 
 const allowedOrigin = "http://localhost:5173";
 
-async function createUserFixture(overrides: {
-  avatarUrl?: string | null;
-  displayName?: string | null;
-  email?: string;
-  password?: string;
-  status?: "ACTIVE" | "BANNED";
-  username?: string;
-} = {}) {
+async function createUserFixture(
+  overrides: {
+    avatarUrl?: string | null;
+    displayName?: string | null;
+    email?: string;
+    password?: string;
+    status?: "ACTIVE" | "BANNED";
+    username?: string;
+  } = {}
+) {
   const password = overrides.password ?? "Password123!";
   const passwordHash = await hashPassword(password);
 
@@ -27,7 +29,8 @@ async function createUserFixture(overrides: {
       passwordHash,
       status: overrides.status ?? "ACTIVE",
       username:
-        overrides.username ?? `chat_${randomUUID().replace(/-/g, "").slice(0, 12)}`
+        overrides.username ??
+        `chat_${randomUUID().replace(/-/g, "").slice(0, 12)}`
     }
   });
 
@@ -224,12 +227,10 @@ describe("messages conversations API", () => {
     `;
 
     expect(participants).toEqual(
-      [peer.user.id, viewer.user.id]
-        .sort()
-        .map((userId) => ({
-          conversationId: response.body.conversation.id as string,
-          userId
-        }))
+      [peer.user.id, viewer.user.id].sort().map((userId) => ({
+        conversationId: response.body.conversation.id as string,
+        userId
+      }))
     );
 
     const readStates = await prisma.$queryRaw<
@@ -250,14 +251,12 @@ describe("messages conversations API", () => {
     `;
 
     expect(readStates).toEqual(
-      [peer.user.id, viewer.user.id]
-        .sort()
-        .map((userId) => ({
-          conversationId: response.body.conversation.id as string,
-          lastReadAt: null,
-          lastReadMessageId: null,
-          userId
-        }))
+      [peer.user.id, viewer.user.id].sort().map((userId) => ({
+        conversationId: response.body.conversation.id as string,
+        lastReadAt: null,
+        lastReadMessageId: null,
+        userId
+      }))
     );
   });
 
@@ -295,7 +294,9 @@ describe("messages conversations API", () => {
       secondResponse.body.conversation.id
     );
     expect(
-      [firstResponse.status, secondResponse.status].sort((left, right) => left - right)
+      [firstResponse.status, secondResponse.status].sort(
+        (left, right) => left - right
+      )
     ).toEqual([200, 201]);
 
     const conversationCount = await prisma.$queryRaw<Array<{ count: bigint }>>`
@@ -450,7 +451,9 @@ describe("messages conversations API", () => {
       hasNextPage: true,
       limit: 1
     });
-    expect(firstPageResponse.body.pageInfo.nextCursor).toEqual(expect.any(String));
+    expect(firstPageResponse.body.pageInfo.nextCursor).toEqual(
+      expect.any(String)
+    );
 
     const secondPageResponse = await request(app)
       .get("/api/v1/conversations")
@@ -591,6 +594,157 @@ describe("messages conversations API", () => {
       limit: 10,
       nextCursor: null
     });
+  });
+
+  test("request recipients can accept or decline independently, and a new message reopens a declined request", async () => {
+    const viewer = await createUserFixture({
+      email: "viewer-request-actions@example.com",
+      username: "viewer_request_actions"
+    });
+    const acceptedPeer = await createUserFixture({
+      email: "accepted-request-actions@example.com",
+      username: "accepted_request_actions"
+    });
+    const declinedPeer = await createUserFixture({
+      email: "declined-request-actions@example.com",
+      username: "declined_request_actions"
+    });
+    const viewerToken = await loginAndGetAccessToken(
+      viewer.user.email,
+      viewer.password
+    );
+    const declinedPeerToken = await loginAndGetAccessToken(
+      declinedPeer.user.email,
+      declinedPeer.password
+    );
+    const acceptedConversation = await insertDirectConversation({
+      userAId: viewer.user.id,
+      userBId: acceptedPeer.user.id
+    });
+    const declinedConversation = await insertDirectConversation({
+      userAId: viewer.user.id,
+      userBId: declinedPeer.user.id
+    });
+
+    await insertMessage({
+      content: "Please accept this request",
+      conversationId: acceptedConversation.conversationId,
+      createdAt: new Date("2026-07-10T08:00:00.000Z"),
+      senderId: acceptedPeer.user.id
+    });
+    await insertMessage({
+      content: "Please decline this request",
+      conversationId: declinedConversation.conversationId,
+      createdAt: new Date("2026-07-10T08:05:00.000Z"),
+      senderId: declinedPeer.user.id
+    });
+
+    const acceptResponse = await request(app)
+      .post(
+        `/api/v1/conversations/${acceptedConversation.conversationId}/request/accept`
+      )
+      .set("Authorization", `Bearer ${viewerToken}`);
+
+    expect(acceptResponse.status).toBe(200);
+    expect(acceptResponse.body.conversation).toMatchObject({
+      folder: "INBOX",
+      id: acceptedConversation.conversationId
+    });
+
+    const declineResponse = await request(app)
+      .post(
+        `/api/v1/conversations/${declinedConversation.conversationId}/request/decline`
+      )
+      .set("Authorization", `Bearer ${viewerToken}`);
+
+    expect(declineResponse.status).toBe(200);
+    expect(declineResponse.body.conversationId).toBe(
+      declinedConversation.conversationId
+    );
+
+    const [acceptedParticipant, declinedParticipant] = await Promise.all([
+      prisma.conversationParticipant.findUniqueOrThrow({
+        where: {
+          conversationId_userId: {
+            conversationId: acceptedConversation.conversationId,
+            userId: viewer.user.id
+          }
+        }
+      }),
+      prisma.conversationParticipant.findUniqueOrThrow({
+        where: {
+          conversationId_userId: {
+            conversationId: declinedConversation.conversationId,
+            userId: viewer.user.id
+          }
+        }
+      })
+    ]);
+
+    expect(acceptedParticipant.requestState).toBe("ACCEPTED");
+    expect(declinedParticipant.requestState).toBe("DECLINED");
+
+    const hiddenThreadResponse = await request(app)
+      .get(
+        `/api/v1/conversations/${declinedConversation.conversationId}/messages`
+      )
+      .set("Authorization", `Bearer ${viewerToken}`);
+
+    expect(hiddenThreadResponse.status).toBe(404);
+    expect(hiddenThreadResponse.body.error.code).toBe("CONVERSATION_NOT_FOUND");
+
+    const reopenResponse = await request(app)
+      .post(
+        `/api/v1/conversations/${declinedConversation.conversationId}/messages`
+      )
+      .set("Authorization", `Bearer ${declinedPeerToken}`)
+      .send({ content: "A later message can create a fresh request." });
+
+    expect(reopenResponse.status).toBe(201);
+
+    const requestsResponse = await request(app)
+      .get("/api/v1/conversations")
+      .query({ folder: "requests" })
+      .set("Authorization", `Bearer ${viewerToken}`);
+
+    expect(requestsResponse.status).toBe(200);
+    expect(requestsResponse.body.conversations).toEqual([
+      expect.objectContaining({
+        folder: "REQUESTS",
+        id: declinedConversation.conversationId
+      })
+    ]);
+
+    const auditActions = await prisma.auditLog.findMany({
+      orderBy: {
+        createdAt: "asc"
+      },
+      select: {
+        action: true,
+        entityId: true
+      },
+      where: {
+        entityId: {
+          in: [
+            acceptedConversation.conversationId,
+            declinedConversation.conversationId
+          ]
+        }
+      }
+    });
+
+    expect(auditActions).toEqual(
+      expect.arrayContaining([
+        {
+          action: "MESSAGE_REQUEST_ACCEPTED",
+          entityId: acceptedConversation.conversationId
+        },
+        {
+          action: "MESSAGE_REQUEST_DECLINED",
+          entityId: declinedConversation.conversationId
+        }
+      ])
+    );
   });
 
   test("GET /api/v1/conversations/:conversationId/messages returns paginated history for participants only", async () => {
@@ -874,7 +1028,9 @@ describe("messages conversations API", () => {
   });
 
   test("GET /api/v1/conversations requires auth and OPTIONS preflight exposes allowed methods", async () => {
-    const unauthenticatedResponse = await request(app).get("/api/v1/conversations");
+    const unauthenticatedResponse = await request(app).get(
+      "/api/v1/conversations"
+    );
 
     expect(unauthenticatedResponse.status).toBe(401);
     expect(unauthenticatedResponse.body.error.code).toBe("AUTH_UNAUTHORIZED");

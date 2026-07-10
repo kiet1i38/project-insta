@@ -34,108 +34,110 @@ const socketHarness = vi.hoisted(() => {
       );
       return socket;
     }),
-    emit: vi.fn((event: string, _payload: unknown, ack?: (value: unknown) => void) => {
-      if (event === "conversations:sync") {
-        ack?.({
-          conversations: [
-            {
+    emit: vi.fn(
+      (event: string, _payload: unknown, ack?: (value: unknown) => void) => {
+        if (event === "conversations:sync") {
+          ack?.({
+            conversations: [
+              {
+                id: "conversation-1",
+                lastMessage: {
+                  content: "Initial peer message",
+                  createdAt: "2026-07-01T20:01:00.000Z",
+                  id: "message-initial-1",
+                  senderId: "user-alice"
+                },
+                peer: {
+                  avatarUrl: null,
+                  displayName: "Alice Demo",
+                  id: "user-alice",
+                  username: "alice_demo"
+                },
+                unreadCount: 0,
+                updatedAt: "2026-07-01T20:01:00.000Z"
+              }
+            ],
+            pageInfo: {
+              hasNextPage: false,
+              limit: 10,
+              nextCursor: null
+            }
+          });
+          return true;
+        }
+
+        if (event === "conversation:messages:sync") {
+          ack?.({
+            conversation: {
               id: "conversation-1",
-              lastMessage: {
-                content: "Initial peer message",
-                createdAt: "2026-07-01T20:01:00.000Z",
-                id: "message-initial-1",
-                senderId: "user-alice"
-              },
               peer: {
                 avatarUrl: null,
                 displayName: "Alice Demo",
                 id: "user-alice",
                 username: "alice_demo"
-              },
-              unreadCount: 0,
-              updatedAt: "2026-07-01T20:01:00.000Z"
-            }
-          ],
-          pageInfo: {
-            hasNextPage: false,
-            limit: 10,
-            nextCursor: null
-          }
-        });
-        return true;
-      }
-
-      if (event === "conversation:messages:sync") {
-        ack?.({
-          conversation: {
-            id: "conversation-1",
-            peer: {
-              avatarUrl: null,
-              displayName: "Alice Demo",
-              id: "user-alice",
-              username: "alice_demo"
-            }
-          },
-          messages: [
-            {
-              content: "Initial peer message",
+              }
+            },
+            messages: [
+              {
+                content: "Initial peer message",
+                conversationId: "conversation-1",
+                createdAt: "2026-07-01T20:01:00.000Z",
+                id: "message-initial-1",
+                sender: {
+                  avatarUrl: null,
+                  displayName: "Alice Demo",
+                  id: "user-alice",
+                  username: "alice_demo"
+                }
+              }
+            ],
+            pageInfo: {
+              hasNextPage: false,
+              limit: 20,
+              nextCursor: null
+            },
+            readState: {
               conversationId: "conversation-1",
-              createdAt: "2026-07-01T20:01:00.000Z",
-              id: "message-initial-1",
+              lastReadAt: "2026-07-01T20:01:00.000Z",
+              lastReadMessageId: "message-initial-1"
+            }
+          });
+          return true;
+        }
+
+        if (event === "conversation:message:create") {
+          ack?.({
+            message: {
+              content: "Realtime hello",
+              conversationId: "conversation-1",
+              createdAt: "2026-07-01T20:05:00.000Z",
+              id: "message-sent-1",
               sender: {
                 avatarUrl: null,
-                displayName: "Alice Demo",
-                id: "user-alice",
-                username: "alice_demo"
+                displayName: "Student Demo",
+                id: "user-123",
+                username: "student_demo"
               }
             }
-          ],
-          pageInfo: {
-            hasNextPage: false,
-            limit: 20,
-            nextCursor: null
-          },
-          readState: {
-            conversationId: "conversation-1",
-            lastReadAt: "2026-07-01T20:01:00.000Z",
-            lastReadMessageId: "message-initial-1"
-          }
-        });
-        return true;
-      }
+          });
+          return true;
+        }
 
-      if (event === "conversation:message:create") {
-        ack?.({
-          message: {
-            content: "Realtime hello",
-            conversationId: "conversation-1",
-            createdAt: "2026-07-01T20:05:00.000Z",
-            id: "message-sent-1",
-            sender: {
-              avatarUrl: null,
-              displayName: "Student Demo",
-              id: "user-123",
-              username: "student_demo"
+        if (event === "conversation:read:update") {
+          ack?.({
+            readState: {
+              conversationId: "conversation-1",
+              lastReadAt: "2026-07-01T20:06:00.000Z",
+              lastReadMessageId: "message-peer-2"
             }
-          }
-        });
+          });
+          return true;
+        }
+
+        ack?.({});
         return true;
       }
-
-      if (event === "conversation:read:update") {
-        ack?.({
-          readState: {
-            conversationId: "conversation-1",
-            lastReadAt: "2026-07-01T20:06:00.000Z",
-            lastReadMessageId: "message-peer-2"
-          }
-        });
-        return true;
-      }
-
-      ack?.({});
-      return true;
-    }),
+    ),
     off: vi.fn((event: string, handler: EventHandler) => {
       ensureHandlers(event).delete(handler);
       return socket;
@@ -344,7 +346,9 @@ describe("Messages UI", () => {
         });
       }
 
-      throw new Error(`Unexpected fetch request: ${String(input)} ${String(init?.method)}`);
+      throw new Error(
+        `Unexpected fetch request: ${String(input)} ${String(init?.method)}`
+      );
     });
 
     document.cookie = "cloneinsta_csrf=csrf-messages; path=/";
@@ -487,7 +491,9 @@ describe("Messages UI", () => {
         );
       }
 
-      throw new Error(`Unexpected fetch request: ${String(input)} ${String(init?.method)}`);
+      throw new Error(
+        `Unexpected fetch request: ${String(input)} ${String(init?.method)}`
+      );
     });
 
     document.cookie = "cloneinsta_csrf=csrf-messages; path=/";
@@ -504,10 +510,7 @@ describe("Messages UI", () => {
 
     expect(socketHarness.io).toHaveBeenCalled();
 
-    await user.type(
-      screen.getByLabelText(/^message$/i),
-      "Realtime hello"
-    );
+    await user.type(screen.getByLabelText(/^message$/i), "Realtime hello");
     await user.click(screen.getByRole("button", { name: /send message/i }));
 
     await waitFor(() => {
@@ -538,7 +541,9 @@ describe("Messages UI", () => {
       });
     });
 
-    expect(await screen.findAllByText(/reply from socket/i)).not.toHaveLength(0);
+    expect(await screen.findAllByText(/reply from socket/i)).not.toHaveLength(
+      0
+    );
   });
 
   it("shows message requests in a dedicated requests view", async () => {
@@ -586,7 +591,9 @@ describe("Messages UI", () => {
         });
       }
 
-      throw new Error(`Unexpected fetch request: ${String(input)} ${String(init?.method)}`);
+      throw new Error(
+        `Unexpected fetch request: ${String(input)} ${String(init?.method)}`
+      );
     });
 
     document.cookie = "cloneinsta_csrf=csrf-messages; path=/";
@@ -597,13 +604,186 @@ describe("Messages UI", () => {
     expect(
       await screen.findByRole("heading", { level: 2, name: /^messages$/i })
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: /requests/i })
-    ).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: /requests/i })).toHaveAttribute(
+      "aria-current",
+      "page"
+    );
     expect(
       await screen.findByRole("link", { name: /open chat with bob demo/i })
     ).toBeInTheDocument();
     expect(screen.getByText(/^request$/i)).toBeInTheDocument();
     expect(screen.getByText(/hi, can we talk\?/i)).toBeInTheDocument();
+  });
+
+  it("accepts an opened message request before enabling the reply composer", async () => {
+    const user = userEvent.setup();
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (input === "http://localhost:3001/api/v1/auth/refresh") {
+        return jsonResponse({
+          accessToken: "messages-access-token",
+          requestId: "req-messages-refresh",
+          user: demoUser
+        });
+      }
+
+      if (
+        input ===
+          "http://localhost:3001/api/v1/conversations?folder=requests&limit=10" &&
+        init?.method === "GET"
+      ) {
+        return jsonResponse({
+          conversations: [
+            {
+              folder: "REQUESTS",
+              id: "conversation-request-accept",
+              lastMessage: {
+                content: "Could we chat?",
+                createdAt: "2026-07-10T08:00:00.000Z",
+                id: "message-request-accept",
+                senderId: "user-bob"
+              },
+              peer: {
+                avatarUrl: null,
+                displayName: "Bob Demo",
+                id: "user-bob",
+                username: "bob_demo"
+              },
+              unreadCount: 0,
+              updatedAt: "2026-07-10T08:00:00.000Z"
+            }
+          ],
+          pageInfo: {
+            hasNextPage: false,
+            limit: 10,
+            nextCursor: null
+          },
+          requestId: "req-messages-requests"
+        });
+      }
+
+      if (
+        input ===
+          "http://localhost:3001/api/v1/conversations/conversation-request-accept/messages?limit=20" &&
+        init?.method === "GET"
+      ) {
+        return jsonResponse({
+          conversation: {
+            folder: "REQUESTS",
+            id: "conversation-request-accept",
+            peer: {
+              avatarUrl: null,
+              displayName: "Bob Demo",
+              id: "user-bob",
+              username: "bob_demo"
+            }
+          },
+          messages: [
+            {
+              content: "Could we chat?",
+              conversationId: "conversation-request-accept",
+              createdAt: "2026-07-10T08:00:00.000Z",
+              id: "message-request-accept",
+              sender: {
+                avatarUrl: null,
+                displayName: "Bob Demo",
+                id: "user-bob",
+                username: "bob_demo"
+              }
+            }
+          ],
+          pageInfo: {
+            hasNextPage: false,
+            limit: 20,
+            nextCursor: null
+          },
+          readState: {
+            conversationId: "conversation-request-accept",
+            lastReadAt: "2026-07-10T08:00:00.000Z",
+            lastReadMessageId: "message-request-accept"
+          },
+          requestId: "req-messages-thread"
+        });
+      }
+
+      if (
+        input ===
+          "http://localhost:3001/api/v1/conversations/conversation-request-accept/request/accept" &&
+        init?.method === "POST"
+      ) {
+        return jsonResponse({
+          conversation: {
+            folder: "INBOX",
+            id: "conversation-request-accept",
+            lastMessage: {
+              content: "Could we chat?",
+              createdAt: "2026-07-10T08:00:00.000Z",
+              id: "message-request-accept",
+              senderId: "user-bob"
+            },
+            peer: {
+              avatarUrl: null,
+              displayName: "Bob Demo",
+              id: "user-bob",
+              username: "bob_demo"
+            },
+            unreadCount: 0,
+            updatedAt: "2026-07-10T08:00:00.000Z"
+          },
+          requestId: "req-messages-accept"
+        });
+      }
+
+      if (
+        input ===
+          "http://localhost:3001/api/v1/conversations?folder=inbox&limit=10" &&
+        init?.method === "GET"
+      ) {
+        return jsonResponse({
+          conversations: [],
+          pageInfo: {
+            hasNextPage: false,
+            limit: 10,
+            nextCursor: null
+          },
+          requestId: "req-messages-inbox"
+        });
+      }
+
+      throw new Error(
+        `Unexpected fetch request: ${String(input)} ${String(init?.method)}`
+      );
+    });
+
+    document.cookie = "cloneinsta_csrf=csrf-messages; path=/";
+    window.history.pushState({}, "", "/messages?view=requests");
+
+    render(<App />);
+
+    await user.click(
+      await screen.findByRole("link", { name: /open chat with bob demo/i })
+    );
+
+    expect(
+      await screen.findByRole("button", { name: /accept request/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /decline request/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /send message/i })
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /accept request/i }));
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe(
+        "/messages/conversation-request-accept"
+      );
+      expect(window.location.search).toBe("");
+    });
+    expect(
+      await screen.findByRole("button", { name: /send message/i })
+    ).toBeInTheDocument();
   });
 });

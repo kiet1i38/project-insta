@@ -21,6 +21,7 @@ import {
   isConversationDirectKeyUniqueConflict,
   type ConversationSummaryRecord,
   type ThreadMessageRecord,
+  updateConversationParticipantRequestState,
   upsertConversationReadState
 } from "./messages.repository.js";
 
@@ -94,6 +95,11 @@ export type ConversationReadStateDto = {
   lastReadMessageId: string | null;
 };
 
+type ConversationRequestAuditContext = {
+  ipAddress: string | null;
+  userAgent: string | null;
+};
+
 type ConversationMessageAuditContext = {
   ipAddress: string | null;
   transport: "REST" | "REALTIME";
@@ -121,6 +127,14 @@ function createMessageRateLimitedError(): AppError {
     429,
     "MESSAGE_RATE_LIMITED",
     "Too many messages sent recently. Please try again later."
+  );
+}
+
+function createMessageRequestNotPendingError(): AppError {
+  return new AppError(
+    409,
+    "MESSAGE_REQUEST_NOT_PENDING",
+    "This message request is no longer pending."
   );
 }
 
@@ -156,7 +170,9 @@ function getConversationPeerOrThrow(
   participants: ConversationSummaryRecord["participants"],
   viewerId: string
 ): ConversationPeerDto {
-  const peer = participants.find((participant) => participant.userId !== viewerId)?.user;
+  const peer = participants.find(
+    (participant) => participant.userId !== viewerId
+  )?.user;
 
   if (!peer) {
     throw new Error("Conversation peer is missing.");
@@ -170,7 +186,24 @@ function getConversationPeerOrThrow(
   };
 }
 
-function toConversationMessageDto(record: ThreadMessageRecord): ConversationMessageDto {
+function getViewerParticipantOrThrow(
+  participants: ConversationSummaryRecord["participants"],
+  viewerId: string
+) {
+  const participant = participants.find(
+    (candidate) => candidate.userId === viewerId
+  );
+
+  if (!participant) {
+    throw new Error("Conversation participant is missing.");
+  }
+
+  return participant;
+}
+
+function toConversationMessageDto(
+  record: ThreadMessageRecord
+): ConversationMessageDto {
   return {
     content: record.content,
     conversationId: record.conversationId,
@@ -227,6 +260,13 @@ async function getConversationSummaryRecordOrThrow(input: {
     throw createConversationNotFoundError();
   }
 
+  if (
+    getViewerParticipantOrThrow(conversation.participants, input.viewerId)
+      .requestState === "DECLINED"
+  ) {
+    throw createConversationNotFoundError();
+  }
+
   return conversation;
 }
 
@@ -250,12 +290,22 @@ function getConversationFolder(
 ): ConversationFolderDto {
   const lastMessage = record.messages[0] ?? null;
   const peer =
-    record.participants.find((participant) => participant.userId !== viewerId) ??
-    null;
+    record.participants.find(
+      (participant) => participant.userId !== viewerId
+    ) ?? null;
   const viewerFollowsPeer = (peer?.user.followers.length ?? 0) > 0;
   const viewerHasSentMessage = record._count.messages > 0;
+  const viewerRequestState = getViewerParticipantOrThrow(
+    record.participants,
+    viewerId
+  ).requestState;
+
+  if (viewerRequestState === "ACCEPTED") {
+    return "INBOX";
+  }
 
   if (
+    viewerRequestState === "PENDING" &&
     !viewerHasSentMessage &&
     !viewerFollowsPeer &&
     lastMessage &&
@@ -265,6 +315,16 @@ function getConversationFolder(
   }
 
   return "INBOX";
+}
+
+function isPendingMessageRequest(
+  record: ConversationSummaryRecord,
+  viewerId: string
+): boolean {
+  return (
+    getViewerParticipantOrThrow(record.participants, viewerId).requestState ===
+      "PENDING" && getConversationFolder(record, viewerId) === "REQUESTS"
+  );
 }
 
 function getConversationParticipantUserIds(
@@ -366,13 +426,19 @@ async function buildConversationThreadDto(input: {
     conversation: {
       folder: getConversationFolder(input.conversation, input.viewerId),
       id: input.conversation.id,
-      peer: getConversationPeerOrThrow(input.conversation.participants, input.viewerId)
+      peer: getConversationPeerOrThrow(
+        input.conversation.participants,
+        input.viewerId
+      )
     },
     messages: visibleMessages.map(toConversationMessageDto),
     pageInfo: {
       hasNextPage,
       limit: input.query.limit,
-      nextCursor: hasNextPage && lastVisibleMessage ? encodeMessageCursor(lastVisibleMessage) : null
+      nextCursor:
+        hasNextPage && lastVisibleMessage
+          ? encodeMessageCursor(lastVisibleMessage)
+          : null
     },
     readState: toConversationReadStateDto(input.conversation.id, {
       lastReadAt: viewerReadState?.lastReadAt ?? null,
@@ -395,15 +461,52 @@ export async function createDirectConversation(input: {
     throw createUserNotFoundError();
   }
 
-  const directKey = buildDirectConversationKey(input.viewerId, input.participantUserId);
+  const directKey = buildDirectConversationKey(
+    input.viewerId,
+    input.participantUserId
+  );
   const existingConversation = await findConversationSummaryByDirectKeyForUser({
     directKey,
     viewerId: input.viewerId
   });
 
   if (existingConversation) {
+    if (
+      getViewerParticipantOrThrow(
+        existingConversation.participants,
+        input.viewerId
+      ).requestState === "DECLINED"
+    ) {
+      await updateConversationParticipantRequestState({
+        conversationId: existingConversation.id,
+        requestState: "ACCEPTED",
+        userId: input.viewerId
+      });
+
+      const reopenedConversation =
+        await findConversationSummaryByDirectKeyForUser({
+          directKey,
+          viewerId: input.viewerId
+        });
+
+      if (!reopenedConversation) {
+        throw createConversationNotFoundError();
+      }
+
+      return {
+        conversation: await toConversationSummaryDto(
+          reopenedConversation,
+          input.viewerId
+        ),
+        created: false
+      };
+    }
+
     return {
-      conversation: await toConversationSummaryDto(existingConversation, input.viewerId),
+      conversation: await toConversationSummaryDto(
+        existingConversation,
+        input.viewerId
+      ),
       created: false
     };
   }
@@ -433,7 +536,10 @@ export async function createDirectConversation(input: {
   }
 
   return {
-    conversation: await toConversationSummaryDto(createdConversation, input.viewerId),
+    conversation: await toConversationSummaryDto(
+      createdConversation,
+      input.viewerId
+    ),
     created
   };
 }
@@ -503,6 +609,107 @@ export async function createConversationMessage(input: {
   });
 
   return createdMessage.message;
+}
+
+export async function acceptConversationRequest(input: {
+  auditContext: ConversationRequestAuditContext;
+  conversationId: string;
+  viewerId: string;
+}): Promise<ConversationSummaryDto> {
+  const conversation = await findConversationSummaryByIdForUser({
+    conversationId: input.conversationId,
+    viewerId: input.viewerId
+  });
+
+  if (!conversation) {
+    throw createConversationNotFoundError();
+  }
+
+  const requestState = getViewerParticipantOrThrow(
+    conversation.participants,
+    input.viewerId
+  ).requestState;
+
+  if (requestState === "ACCEPTED") {
+    return toConversationSummaryDto(conversation, input.viewerId);
+  }
+
+  if (!isPendingMessageRequest(conversation, input.viewerId)) {
+    throw createMessageRequestNotPendingError();
+  }
+
+  await updateConversationParticipantRequestState({
+    conversationId: input.conversationId,
+    requestState: "ACCEPTED",
+    userId: input.viewerId
+  });
+  await createConversationAuditLogRecord({
+    action: "MESSAGE_REQUEST_ACCEPTED",
+    actorId: input.viewerId,
+    actorMetadata: {
+      conversationId: input.conversationId
+    } satisfies Prisma.InputJsonValue,
+    entityId: input.conversationId,
+    entityType: "CONVERSATION",
+    ipAddress: input.auditContext.ipAddress,
+    userAgent: input.auditContext.userAgent
+  });
+
+  const acceptedConversation = await findConversationSummaryByIdForUser({
+    conversationId: input.conversationId,
+    viewerId: input.viewerId
+  });
+
+  if (!acceptedConversation) {
+    throw createConversationNotFoundError();
+  }
+
+  return toConversationSummaryDto(acceptedConversation, input.viewerId);
+}
+
+export async function declineConversationRequest(input: {
+  auditContext: ConversationRequestAuditContext;
+  conversationId: string;
+  viewerId: string;
+}): Promise<void> {
+  const conversation = await findConversationSummaryByIdForUser({
+    conversationId: input.conversationId,
+    viewerId: input.viewerId
+  });
+
+  if (!conversation) {
+    throw createConversationNotFoundError();
+  }
+
+  const requestState = getViewerParticipantOrThrow(
+    conversation.participants,
+    input.viewerId
+  ).requestState;
+
+  if (requestState === "DECLINED") {
+    return;
+  }
+
+  if (!isPendingMessageRequest(conversation, input.viewerId)) {
+    throw createMessageRequestNotPendingError();
+  }
+
+  await updateConversationParticipantRequestState({
+    conversationId: input.conversationId,
+    requestState: "DECLINED",
+    userId: input.viewerId
+  });
+  await createConversationAuditLogRecord({
+    action: "MESSAGE_REQUEST_DECLINED",
+    actorId: input.viewerId,
+    actorMetadata: {
+      conversationId: input.conversationId
+    } satisfies Prisma.InputJsonValue,
+    entityId: input.conversationId,
+    entityType: "CONVERSATION",
+    ipAddress: input.auditContext.ipAddress,
+    userAgent: input.auditContext.userAgent
+  });
 }
 
 export async function createConversationMessageRealtime(input: {
@@ -583,7 +790,9 @@ export async function markConversationReadRealtime(input: {
   const readState = await markConversationRead(input);
 
   return {
-    participantUserIds: conversation.participants.map((participant) => participant.userId),
+    participantUserIds: conversation.participants.map(
+      (participant) => participant.userId
+    ),
     readState
   };
 }
