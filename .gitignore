@@ -33,9 +33,11 @@ playwright/.cache/
 playwright/.auth/
 **/.auth/
 storageState.json
+auth-state*.json
 trace.zip
 *.webm
 *.har
+videos/
 
 # Local uploads and temp files
 server/uploads/*

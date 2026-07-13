@@ -138,7 +138,7 @@ See `instruction.html` locally for the student-focused explanation of the data f
 
 ## Quality gates
 
-GitHub Actions runs `npm ci`, Prisma validation, test-database migrations, lint, tests, and build on pushes and pull requests to `main`. Local browser QA uses `http://localhost:5173` and re-seeds the demo database after flows that mutate it.
+GitHub Actions runs `npm ci`, Prisma validation, test-database migrations, lint, tests, and build on pushes and pull requests to `main`. CodeQL scans the JavaScript/TypeScript source on pushes, pull requests, and a weekly schedule; Dependabot monitors npm, GitHub Actions, and Docker Compose dependencies weekly. Local browser QA uses `http://localhost:5173` and re-seeds the demo database after flows that mutate it.
 
 ## Scope
 
