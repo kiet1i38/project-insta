@@ -4,7 +4,10 @@ import type {
   UpdateOwnProfileInput
 } from "./users.schema.js";
 import {
+  createUserAuditLogRecord,
+  createUserBlockRelationship,
   createFollowRelationship,
+  deleteUserBlockRelationship,
   deleteFollowRelationship,
   findActiveUserById,
   findOwnProfileById,
@@ -55,6 +58,16 @@ type FollowStateDto = {
   viewerIsFollowing: boolean;
 };
 
+type BlockStateDto = {
+  targetUserId: string;
+  viewerHasBlocked: boolean;
+};
+
+type UserBlockAuditContext = {
+  ipAddress: string | null;
+  userAgent: string | null;
+};
+
 function createUserNotFoundError(): AppError {
   return new AppError(404, "USER_NOT_FOUND", "User not found.");
 }
@@ -64,6 +77,14 @@ function createSelfFollowError(): AppError {
     400,
     "FOLLOW_SELF_NOT_ALLOWED",
     "Users cannot follow themselves."
+  );
+}
+
+function createSelfBlockError(): AppError {
+  return new AppError(
+    400,
+    "BLOCK_SELF_NOT_ALLOWED",
+    "Users cannot block themselves."
   );
 }
 
@@ -177,6 +198,78 @@ export async function unfollowUser(input: {
   return {
     targetUserId: input.targetUserId,
     viewerIsFollowing: false
+  };
+}
+
+export async function blockUser(input: {
+  auditContext: UserBlockAuditContext;
+  targetUserId: string;
+  viewerId: string;
+}): Promise<BlockStateDto> {
+  if (input.viewerId === input.targetUserId) {
+    throw createSelfBlockError();
+  }
+
+  const targetUser = await findActiveUserById(input.targetUserId);
+
+  if (!targetUser) {
+    throw createUserNotFoundError();
+  }
+
+  const created = await createUserBlockRelationship({
+    blockedUserId: input.targetUserId,
+    blockerId: input.viewerId
+  });
+
+  if (created) {
+    await createUserAuditLogRecord({
+      action: "USER_BLOCKED",
+      actorId: input.viewerId,
+      entityId: input.targetUserId,
+      ipAddress: input.auditContext.ipAddress,
+      userAgent: input.auditContext.userAgent
+    });
+  }
+
+  return {
+    targetUserId: input.targetUserId,
+    viewerHasBlocked: true
+  };
+}
+
+export async function unblockUser(input: {
+  auditContext: UserBlockAuditContext;
+  targetUserId: string;
+  viewerId: string;
+}): Promise<BlockStateDto> {
+  if (input.viewerId === input.targetUserId) {
+    throw createSelfBlockError();
+  }
+
+  const targetUser = await findActiveUserById(input.targetUserId);
+
+  if (!targetUser) {
+    throw createUserNotFoundError();
+  }
+
+  const removed = await deleteUserBlockRelationship({
+    blockedUserId: input.targetUserId,
+    blockerId: input.viewerId
+  });
+
+  if (removed) {
+    await createUserAuditLogRecord({
+      action: "USER_UNBLOCKED",
+      actorId: input.viewerId,
+      entityId: input.targetUserId,
+      ipAddress: input.auditContext.ipAddress,
+      userAgent: input.auditContext.userAgent
+    });
+  }
+
+  return {
+    targetUserId: input.targetUserId,
+    viewerHasBlocked: false
   };
 }
 

@@ -697,4 +697,111 @@ describe("users me profile API", () => {
       "Authorization"
     );
   });
+
+  test("POST and DELETE /api/v1/users/:userId/block manage one safety block and record auditable events", async () => {
+    const viewer = await createUserFixture({
+      email: "block-viewer@example.com",
+      username: "block_viewer"
+    });
+    const target = await createUserFixture({
+      email: "block-target@example.com",
+      username: "block_target"
+    });
+    const accessToken = await loginAndGetAccessToken(
+      viewer.user.email,
+      viewer.password
+    );
+
+    const blockResponse = await request(app)
+      .post(`/api/v1/users/${target.user.id}/block`)
+      .set("Origin", allowedOrigin)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(blockResponse.status).toBe(200);
+    expect(blockResponse.headers["access-control-allow-origin"]).toBe(
+      allowedOrigin
+    );
+    expect(blockResponse.body).toEqual({
+      requestId: expect.stringMatching(/^req_/),
+      targetUserId: target.user.id,
+      viewerHasBlocked: true
+    });
+
+    const duplicateResponse = await request(app)
+      .post(`/api/v1/users/${target.user.id}/block`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(duplicateResponse.status).toBe(200);
+    expect(
+      await prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(*)::bigint AS count
+        FROM "UserBlock"
+        WHERE "blockerId" = ${viewer.user.id}::uuid
+          AND "blockedUserId" = ${target.user.id}::uuid
+      `
+    ).toEqual([{ count: 1n }]);
+
+    const unblockResponse = await request(app)
+      .delete(`/api/v1/users/${target.user.id}/block`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(unblockResponse.status).toBe(200);
+    expect(unblockResponse.body).toEqual({
+      requestId: expect.stringMatching(/^req_/),
+      targetUserId: target.user.id,
+      viewerHasBlocked: false
+    });
+
+    const auditLogs = await prisma.auditLog.findMany({
+      orderBy: { createdAt: "asc" },
+      select: {
+        action: true,
+        actorId: true,
+        entityId: true,
+        entityType: true
+      },
+      where: {
+        actorId: viewer.user.id,
+        entityId: target.user.id
+      }
+    });
+
+    expect(auditLogs).toEqual(
+      expect.arrayContaining([
+        {
+          action: "USER_BLOCKED",
+          actorId: viewer.user.id,
+          entityId: target.user.id,
+          entityType: "USER"
+        },
+        {
+          action: "USER_UNBLOCKED",
+          actorId: viewer.user.id,
+          entityId: target.user.id,
+          entityType: "USER"
+        }
+      ])
+    );
+  });
+
+  test("POST /api/v1/users/:userId/block rejects self-blocking", async () => {
+    const viewer = await createUserFixture({
+      email: "self-block@example.com",
+      username: "self_block"
+    });
+    const accessToken = await loginAndGetAccessToken(
+      viewer.user.email,
+      viewer.password
+    );
+
+    const response = await request(app)
+      .post(`/api/v1/users/${viewer.user.id}/block`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatchObject({
+      code: "BLOCK_SELF_NOT_ALLOWED",
+      message: "Users cannot block themselves."
+    });
+  });
 });

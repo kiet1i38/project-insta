@@ -17,6 +17,7 @@ const managedTables = [
   `"Report"`,
   `"Like"`,
   `"Follow"`,
+  `"UserBlock"`,
   `"Comment"`,
   `"Post"`,
   `"RefreshToken"`,

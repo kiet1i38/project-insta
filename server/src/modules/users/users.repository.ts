@@ -118,6 +118,73 @@ export async function deleteFollowRelationship(input: {
   });
 }
 
+export async function createUserBlockRelationship(input: {
+  blockedUserId: string;
+  blockerId: string;
+}): Promise<boolean> {
+  const result = await prisma.userBlock.createMany({
+    data: input,
+    skipDuplicates: true
+  });
+
+  return result.count === 1;
+}
+
+export async function deleteUserBlockRelationship(input: {
+  blockedUserId: string;
+  blockerId: string;
+}): Promise<boolean> {
+  const result = await prisma.userBlock.deleteMany({
+    where: input
+  });
+
+  return result.count === 1;
+}
+
+export async function hasUserBlockRelationship(input: {
+  firstUserId: string;
+  secondUserId: string;
+}): Promise<boolean> {
+  const count = await prisma.userBlock.count({
+    where: {
+      OR: [
+        {
+          blockedUserId: input.secondUserId,
+          blockerId: input.firstUserId
+        },
+        {
+          blockedUserId: input.firstUserId,
+          blockerId: input.secondUserId
+        }
+      ]
+    }
+  });
+
+  return count > 0;
+}
+
+export async function createUserAuditLogRecord(input: {
+  action: string;
+  actorId: string;
+  entityId: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+}) {
+  return prisma.auditLog.create({
+    data: {
+      action: input.action,
+      actorId: input.actorId,
+      actorMetadata: {
+        targetUserId: input.entityId
+      },
+      entityId: input.entityId,
+      entityType: "USER",
+      ipAddress: input.ipAddress,
+      userAgent: input.userAgent
+    }
+  });
+}
+
 export async function findUsersForSearch(input: {
   cursor?: SearchUsersCursor;
   limit: number;

@@ -786,4 +786,131 @@ describe("Messages UI", () => {
       await screen.findByRole("button", { name: /send message/i })
     ).toBeInTheDocument();
   });
+
+  it("blocks the thread peer through the protected API and returns to the requests folder", async () => {
+    const user = userEvent.setup();
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (input === "http://localhost:3001/api/v1/auth/refresh") {
+        return jsonResponse({
+          accessToken: "messages-access-token",
+          requestId: "req-messages-refresh",
+          user: demoUser
+        });
+      }
+
+      if (
+        input ===
+          "http://localhost:3001/api/v1/conversations?folder=requests&limit=10" &&
+        init?.method === "GET"
+      ) {
+        return jsonResponse({
+          conversations: [
+            {
+              folder: "REQUESTS",
+              id: "conversation-block-peer",
+              lastMessage: {
+                content: "Please do not retain this request after block.",
+                createdAt: "2026-07-13T06:00:00.000Z",
+                id: "message-block-peer",
+                senderId: "user-bob"
+              },
+              peer: {
+                avatarUrl: null,
+                displayName: "Bob Demo",
+                id: "user-bob",
+                username: "bob_demo"
+              },
+              unreadCount: 1,
+              updatedAt: "2026-07-13T06:00:00.000Z"
+            }
+          ],
+          pageInfo: {
+            hasNextPage: false,
+            limit: 10,
+            nextCursor: null
+          },
+          requestId: "req-messages-requests"
+        });
+      }
+
+      if (
+        input ===
+          "http://localhost:3001/api/v1/conversations/conversation-block-peer/messages?limit=20" &&
+        init?.method === "GET"
+      ) {
+        return jsonResponse({
+          conversation: {
+            folder: "REQUESTS",
+            id: "conversation-block-peer",
+            peer: {
+              avatarUrl: null,
+              displayName: "Bob Demo",
+              id: "user-bob",
+              username: "bob_demo"
+            }
+          },
+          messages: [],
+          pageInfo: {
+            hasNextPage: false,
+            limit: 20,
+            nextCursor: null
+          },
+          readState: {
+            conversationId: "conversation-block-peer",
+            lastReadAt: null,
+            lastReadMessageId: null
+          },
+          requestId: "req-messages-thread"
+        });
+      }
+
+      if (
+        input === "http://localhost:3001/api/v1/users/user-bob/block" &&
+        init?.method === "POST"
+      ) {
+        return jsonResponse({
+          requestId: "req-block-peer",
+          targetUserId: "user-bob",
+          viewerHasBlocked: true
+        });
+      }
+
+      throw new Error(
+        `Unexpected fetch request: ${String(input)} ${String(init?.method)}`
+      );
+    });
+
+    document.cookie = "cloneinsta_csrf=csrf-messages; path=/";
+    window.history.pushState(
+      {},
+      "",
+      "/messages/conversation-block-peer?view=requests"
+    );
+
+    render(<App />);
+
+    await user.click(
+      await screen.findByRole("button", { name: /block @bob_demo/i })
+    );
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/messages");
+      expect(window.location.search).toBe("?view=requests");
+    });
+
+    const blockCall = vi
+      .mocked(globalThis.fetch)
+      .mock.calls.find(
+        ([requestInput, requestInit]) =>
+          requestInput === "http://localhost:3001/api/v1/users/user-bob/block" &&
+          requestInit?.method === "POST"
+      );
+
+    expect(blockCall).toBeDefined();
+    const blockHeaders = blockCall?.[1]?.headers as Headers;
+    expect(blockHeaders.get("Authorization")).toBe(
+      "Bearer messages-access-token"
+    );
+  });
 });

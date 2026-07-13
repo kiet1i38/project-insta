@@ -395,6 +395,12 @@ export type CreateReportResponse = {
   requestId: string;
 };
 
+export type UserBlockResponse = {
+  requestId: string;
+  targetUserId: string;
+  viewerHasBlocked: boolean;
+};
+
 export type AuditLogActor = {
   id: string;
   role: "ADMIN" | "USER";
@@ -991,6 +997,16 @@ export async function createReport(
     includeAccessToken: true,
     method: "POST"
   });
+}
+
+export async function blockUser(userId: string): Promise<UserBlockResponse> {
+  return requestJson<UserBlockResponse>(
+    `/users/${encodeURIComponent(userId)}/block`,
+    {
+      includeAccessToken: true,
+      method: "POST"
+    }
+  );
 }
 
 export async function getModerationReports(

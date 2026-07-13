@@ -6,9 +6,11 @@ import {
   updateOwnProfileSchema
 } from "./users.schema.js";
 import {
+  blockUser,
   followUser,
   getOwnProfile,
   searchUsers,
+  unblockUser,
   unfollowUser,
   updateOwnProfile
 } from "./users.service.js";
@@ -165,6 +167,82 @@ export const unfollowUserController: RequestHandler = async (req, res, next) => 
     }
 
     const result = await unfollowUser({
+      targetUserId: parsedParams.data.userId,
+      viewerId: req.authUser.id
+    });
+
+    res.status(200).json({
+      ...result,
+      requestId: req.requestId
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const blockUserController: RequestHandler = async (req, res, next) => {
+  const parsedParams = parseUserRouteParams(req.params.userId);
+
+  if (!parsedParams.success) {
+    res.status(400).json({
+      error: {
+        code: "VALIDATION_ERROR",
+        details: toValidationDetails(parsedParams.error.issues),
+        message: "Invalid route parameters."
+      },
+      requestId: req.requestId
+    });
+    return;
+  }
+
+  try {
+    if (!req.authUser) {
+      throw createUnauthorizedError();
+    }
+
+    const result = await blockUser({
+      auditContext: {
+        ipAddress: req.ip || null,
+        userAgent: req.get("user-agent") ?? null
+      },
+      targetUserId: parsedParams.data.userId,
+      viewerId: req.authUser.id
+    });
+
+    res.status(200).json({
+      ...result,
+      requestId: req.requestId
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const unblockUserController: RequestHandler = async (req, res, next) => {
+  const parsedParams = parseUserRouteParams(req.params.userId);
+
+  if (!parsedParams.success) {
+    res.status(400).json({
+      error: {
+        code: "VALIDATION_ERROR",
+        details: toValidationDetails(parsedParams.error.issues),
+        message: "Invalid route parameters."
+      },
+      requestId: req.requestId
+    });
+    return;
+  }
+
+  try {
+    if (!req.authUser) {
+      throw createUnauthorizedError();
+    }
+
+    const result = await unblockUser({
+      auditContext: {
+        ipAddress: req.ip || null,
+        userAgent: req.get("user-agent") ?? null
+      },
       targetUserId: parsedParams.data.userId,
       viewerId: req.authUser.id
     });

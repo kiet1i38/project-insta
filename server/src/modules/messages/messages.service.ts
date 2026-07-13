@@ -6,6 +6,7 @@ import type {
   ListConversationsQueryInput,
   MarkConversationReadInput
 } from "./messages.schema.js";
+import { hasUserBlockRelationship } from "../users/users.repository.js";
 import {
   countUnreadMessagesForConversation,
   createConversationAuditLogRecord,
@@ -458,6 +459,15 @@ export async function createDirectConversation(input: {
   const peer = await findActiveConversationPeerById(input.participantUserId);
 
   if (!peer) {
+    throw createUserNotFoundError();
+  }
+
+  if (
+    await hasUserBlockRelationship({
+      firstUserId: input.viewerId,
+      secondUserId: input.participantUserId
+    })
+  ) {
     throw createUserNotFoundError();
   }
 

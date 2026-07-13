@@ -229,6 +229,14 @@ export async function seedDatabase(client: PrismaClient = prisma): Promise<SeedS
           ]
         }
       }),
+      tx.userBlock.deleteMany({
+        where: {
+          OR: [
+            { blockerId: { in: demoUserIds as unknown as string[] } },
+            { blockedUserId: { in: demoUserIds as unknown as string[] } }
+          ]
+        }
+      }),
       tx.refreshToken.deleteMany({
         where: {
           userId: { in: demoUserIds as unknown as string[] }

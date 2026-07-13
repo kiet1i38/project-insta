@@ -85,6 +85,7 @@ describe("core Prisma schema", () => {
           'Comment',
           'Like',
           'Follow',
+          'UserBlock',
           'Message',
           'Report',
           'ModerationAction',
@@ -105,7 +106,8 @@ describe("core Prisma schema", () => {
       "Post",
       "RefreshToken",
       "Report",
-      "User"
+      "User",
+      "UserBlock"
     ]);
 
     const userUniqueIndexes = await prisma.$queryRaw<
@@ -137,10 +139,11 @@ describe("core Prisma schema", () => {
       SELECT indexname, indexdef
       FROM pg_indexes
       WHERE schemaname = 'public'
-        AND tablename IN ('Like', 'Follow', 'ConversationParticipant', 'ConversationReadState')
+        AND tablename IN ('Like', 'Follow', 'UserBlock', 'ConversationParticipant', 'ConversationReadState')
         AND indexname IN (
           'Like_pkey',
           'Follow_pkey',
+          'UserBlock_pkey',
           'ConversationParticipant_pkey',
           'ConversationReadState_pkey'
         )
@@ -155,6 +158,10 @@ describe("core Prisma schema", () => {
         expect.objectContaining({
           indexname: "Follow_pkey",
           indexdef: expect.stringContaining(`("followerId", "followingId")`)
+        }),
+        expect.objectContaining({
+          indexname: "UserBlock_pkey",
+          indexdef: expect.stringContaining(`("blockerId", "blockedUserId")`)
         }),
         expect.objectContaining({
           indexname: "ConversationParticipant_pkey",
@@ -344,6 +351,17 @@ describe("core Prisma schema", () => {
         VALUES (${userId}::uuid, ${userId}::uuid, NOW())
       `
     ).rejects.toThrow(/Follow_no_self_follow_check/);
+  });
+
+  it("rejects self-block rows at the database layer", async () => {
+    const userId = await insertUser("self-block");
+
+    await expect(
+      prisma.$executeRaw`
+        INSERT INTO "UserBlock" ("blockerId", "blockedUserId", "createdAt")
+        VALUES (${userId}::uuid, ${userId}::uuid, NOW())
+      `
+    ).rejects.toThrow(/UserBlock_no_self_block_check/);
   });
 
   it("allows only one direct conversation per user pair at the database layer", async () => {

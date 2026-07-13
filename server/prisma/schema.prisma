@@ -50,6 +50,8 @@ model User {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   auditLogs          AuditLog[]         @relation("AuditActor")
+  blocksCreated      UserBlock[]        @relation("UserBlocksCreated")
+  blocksReceived     UserBlock[]        @relation("UserBlocksReceived")
   comments           Comment[]
   conversationParticipants ConversationParticipant[]
   conversationReadStates   ConversationReadState[]
@@ -198,6 +200,18 @@ model Follow {
   @@index([followerId])
   @@index([followingId])
   @@index([createdAt])
+}
+
+model UserBlock {
+  blockerId     String   @db.Uuid
+  blockedUserId String   @db.Uuid
+  createdAt     DateTime @default(now())
+  blocker       User     @relation("UserBlocksCreated", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedUser   User     @relation("UserBlocksReceived", fields: [blockedUserId], references: [id], onDelete: Cascade)
+
+  @@id([blockerId, blockedUserId])
+  @@index([blockerId])
+  @@index([blockedUserId])
 }
 
 model Report {

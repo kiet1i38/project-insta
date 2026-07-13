@@ -1052,4 +1052,69 @@ describe("messages conversations API", () => {
       "POST"
     );
   });
+
+  test("a block hides an existing thread from both users and prevents new direct messages", async () => {
+    const viewer = await createUserFixture({
+      email: "blocked-thread-viewer@example.com",
+      username: "blocked_thread_viewer"
+    });
+    const peer = await createUserFixture({
+      email: "blocked-thread-peer@example.com",
+      username: "blocked_thread_peer"
+    });
+    const viewerToken = await loginAndGetAccessToken(
+      viewer.user.email,
+      viewer.password
+    );
+    const peerToken = await loginAndGetAccessToken(peer.user.email, peer.password);
+    const conversation = await insertDirectConversation({
+      userAId: viewer.user.id,
+      userBId: peer.user.id
+    });
+
+    await insertMessage({
+      content: "Existing history remains stored for audit.",
+      conversationId: conversation.conversationId,
+      createdAt: new Date("2026-07-13T06:00:00.000Z"),
+      senderId: peer.user.id
+    });
+    await prisma.$executeRaw`
+      INSERT INTO "UserBlock" ("blockerId", "blockedUserId", "createdAt")
+      VALUES (${viewer.user.id}::uuid, ${peer.user.id}::uuid, NOW())
+    `;
+
+    const [viewerInbox, peerInbox, viewerThread, peerMessage, newConversation] =
+      await Promise.all([
+        request(app)
+          .get("/api/v1/conversations")
+          .set("Authorization", `Bearer ${viewerToken}`),
+        request(app)
+          .get("/api/v1/conversations")
+          .set("Authorization", `Bearer ${peerToken}`),
+        request(app)
+          .get(`/api/v1/conversations/${conversation.conversationId}/messages`)
+          .set("Authorization", `Bearer ${viewerToken}`),
+        request(app)
+          .post(`/api/v1/conversations/${conversation.conversationId}/messages`)
+          .set("Authorization", `Bearer ${peerToken}`)
+          .send({ content: "This must not be delivered." }),
+        request(app)
+          .post("/api/v1/conversations")
+          .set("Authorization", `Bearer ${peerToken}`)
+          .send({ participantUserId: viewer.user.id })
+      ]);
+
+    expect(viewerInbox.status).toBe(200);
+    expect(viewerInbox.body.conversations).toEqual([]);
+    expect(peerInbox.status).toBe(200);
+    expect(peerInbox.body.conversations).toEqual([]);
+
+    for (const response of [viewerThread, peerMessage]) {
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe("CONVERSATION_NOT_FOUND");
+    }
+
+    expect(newConversation.status).toBe(404);
+    expect(newConversation.body.error.code).toBe("USER_NOT_FOUND");
+  });
 });

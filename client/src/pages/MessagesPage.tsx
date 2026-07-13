@@ -9,6 +9,7 @@ import {
 import {
   ApiError,
   acceptConversationRequest,
+  blockUser,
   createConversationMessage,
   createDirectConversation,
   declineConversationRequest,
@@ -214,6 +215,7 @@ export function MessagesPage() {
   const [draft, setDraft] = useState("");
   const [draftError, setDraftError] = useState<string | null>(null);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
+  const [isBlockingPeer, setIsBlockingPeer] = useState(false);
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [isLoadingMoreConversations, setIsLoadingMoreConversations] =
     useState(false);
@@ -822,6 +824,42 @@ export function MessagesPage() {
     }
   }
 
+  async function handleBlockPeer(): Promise<void> {
+    if (!thread) {
+      return;
+    }
+
+    const blockedConversation = thread.conversation;
+
+    setIsBlockingPeer(true);
+    setThreadError(null);
+
+    try {
+      await blockUser(blockedConversation.peer.id);
+      setConversations((currentConversations) =>
+        currentConversations.filter(
+          (conversation) => conversation.id !== blockedConversation.id
+        )
+      );
+      setThread(null);
+      navigate(
+        blockedConversation.folder === "REQUESTS"
+          ? "/messages?view=requests"
+          : "/messages",
+        { replace: true }
+      );
+    } catch (error) {
+      setThreadError(
+        getErrorMessage(
+          error,
+          "Could not block this account right now. Please try again."
+        )
+      );
+    } finally {
+      setIsBlockingPeer(false);
+    }
+  }
+
   return (
     <section
       className="panel messages-page"
@@ -1052,6 +1090,16 @@ export function MessagesPage() {
                 >
                   Back to inbox
                 </Link>
+                <button
+                  className="secondary-button"
+                  disabled={isBlockingPeer}
+                  onClick={() => void handleBlockPeer()}
+                  type="button"
+                >
+                  {isBlockingPeer
+                    ? "Blocking..."
+                    : `Block @${thread.conversation.peer.username}`}
+                </button>
               </div>
 
               {thread.pageInfo.hasNextPage ? (

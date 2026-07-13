@@ -163,6 +163,41 @@ function buildDeclinedConversationWhereClause(
   };
 }
 
+function buildBlockedConversationWhereClause(
+  viewerId: string
+): Prisma.ConversationWhereInput {
+  return {
+    OR: [
+      {
+        participants: {
+          some: {
+            user: {
+              blocksReceived: {
+                some: {
+                  blockerId: viewerId
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        participants: {
+          some: {
+            user: {
+              blocksCreated: {
+                some: {
+                  blockedUserId: viewerId
+                }
+              }
+            }
+          }
+        }
+      }
+    ]
+  };
+}
+
 function buildConversationCursorWhereClause(
   cursor?: ConversationCursor
 ): Prisma.ConversationWhereInput | undefined {
@@ -243,6 +278,7 @@ export async function findConversationSummaryByDirectKeyForUser(input: {
     select: buildConversationSummarySelect(input.viewerId),
     where: {
       directKey: input.directKey,
+      NOT: buildBlockedConversationWhereClause(input.viewerId),
       participants: {
         some: {
           userId: input.viewerId
@@ -260,6 +296,7 @@ export async function findConversationSummaryByIdForUser(input: {
     select: buildConversationSummarySelect(input.viewerId),
     where: {
       id: input.conversationId,
+      NOT: buildBlockedConversationWhereClause(input.viewerId),
       participants: {
         some: {
           userId: input.viewerId
@@ -302,6 +339,9 @@ export async function findConversationRoomIdsForUser(
         conversationId: true
       },
       where: {
+        conversation: {
+          NOT: buildBlockedConversationWhereClause(userId)
+        },
         userId
       }
     });
@@ -343,6 +383,9 @@ export async function findConversationSummariesForUser(input: {
         },
         {
           NOT: buildDeclinedConversationWhereClause(input.viewerId)
+        },
+        {
+          NOT: buildBlockedConversationWhereClause(input.viewerId)
         },
         folderFilter,
         ...(paginationFilter ? [paginationFilter] : [])
@@ -390,6 +433,7 @@ export async function findConversationMessagesForUser(input: {
         {
           conversationId: input.conversationId,
           conversation: {
+            NOT: buildBlockedConversationWhereClause(input.viewerId),
             participants: {
               some: {
                 userId: input.viewerId
@@ -413,6 +457,7 @@ export async function findConversationMessageByIdForUser(input: {
     where: {
       conversationId: input.conversationId,
       conversation: {
+        NOT: buildBlockedConversationWhereClause(input.viewerId),
         participants: {
           some: {
             userId: input.viewerId
