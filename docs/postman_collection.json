@@ -1,0 +1,578 @@
+{
+  "info": {
+    "_postman_id": "f42f9e87-8d9e-4c80-905d-a78c0d9b7e13",
+    "name": "CloneInsta API v1",
+    "description": "Import this collection into Postman after running `npm run db:seed` and `npm run dev:server`. The REST base URL is `{{baseUrl}}`; protected requests require `Authorization: Bearer {{accessToken}}`. Run **Auth / Login as demo user** first: its test script stores the returned access token. Login also sets the HttpOnly refresh cookie and readable `cloneinsta_csrf` cookie. Before Refresh or Logout, copy that cookie value into `csrfToken` if Postman did not populate it automatically; those two endpoints require the cookie plus `Origin: http://localhost:5173` and `X-CSRF-Token: {{csrfToken}}`.\n\nSeed credentials: `alice_demo` / `UserDemo123!`, `bob_demo` / `UserDemo123!`, and `admin_demo` / `AdminDemo123!`. Use Alice for normal-user requests and log in as Admin for the Admin folder. The values in `userId`, `postId`, `commentId`, `conversationId`, `messageId`, and `reportId` are placeholders: copy IDs from a successful previous response. Cursor values are opaque base64url strings returned in `pageInfo.nextCursor`; never construct them manually.\n\nEvery successful payload includes `requestId`. Errors follow `{ error: { code, message }, requestId }`; validation errors also include `error.details`. Representative successful response shapes: login `{ accessToken, user, requestId }`; feed `{ posts, pageInfo, requestId }`; report `{ report, requestId }`; conversation list `{ conversations, pageInfo, requestId }`. All non-auth data routes are versioned below `/api/v1`. Socket.IO realtime events (conversation/message sync, send and read) are intentionally not included because this is a REST Postman collection.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3001/api/v1" },
+    { "key": "accessToken", "value": "" },
+    { "key": "csrfToken", "value": "" },
+    { "key": "userId", "value": "11111111-1111-4111-8111-111111111111" },
+    { "key": "postId", "value": "22222222-2222-4222-8222-222222222222" },
+    { "key": "commentId", "value": "33333333-3333-4333-8333-333333333333" },
+    {
+      "key": "conversationId",
+      "value": "44444444-4444-4444-8444-444444444444"
+    },
+    { "key": "messageId", "value": "55555555-5555-4555-8555-555555555555" },
+    { "key": "reportId", "value": "66666666-6666-4666-8666-666666666666" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Get health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Checks the Express service and Prisma/PostgreSQL readiness. 200 example: `{ status: \"ok\", database: \"up\", service: \"cloneinsta-server\", environment, timestamp, requestId }`.",
+            "url": "{{baseUrl}}/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "description": "Creates an ACTIVE user. Username is lowercased and must be 3-30 lowercase letters, numbers, dots, or underscores; password is 8-72 chars with lowercase, uppercase, and a number. 201 example: `{ user: { id, username, displayName, email, role, status, createdAt }, requestId }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"API Test User\",\n  \"username\": \"api_user_{{$randomInt}}\",\n  \"email\": \"api.user.{{$randomInt}}@example.test\",\n  \"password\": \"StrongPass123\",\n  \"confirmPassword\": \"StrongPass123\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/register"
+          }
+        },
+        {
+          "name": "Login as demo user",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns an access token', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "const csrfCookie = pm.cookies.get('cloneinsta_csrf');",
+                  "if (csrfCookie) pm.collectionVariables.set('csrfToken', csrfCookie);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "description": "Uses a seeded normal user and stores `accessToken`. Postman keeps the refresh and CSRF cookies for localhost. 200 example: `{ accessToken, user, requestId }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"alice_demo\",\n  \"password\": \"UserDemo123!\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Login as admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns an admin access token', function () { pm.response.to.have.status(200); });",
+                  "pm.collectionVariables.set('accessToken', pm.response.json().accessToken);",
+                  "const csrfCookie = pm.cookies.get('cloneinsta_csrf');",
+                  "if (csrfCookie) pm.collectionVariables.set('csrfToken', csrfCookie);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "description": "Run before Admin requests. It replaces `accessToken` with an ADMIN token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"admin_demo\",\n  \"password\": \"AdminDemo123!\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Refresh current session",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Origin", "value": "http://localhost:5173" },
+              { "key": "X-CSRF-Token", "value": "{{csrfToken}}" }
+            ],
+            "description": "Requires the refresh-cookie session, exact local client Origin, and matching CSRF cookie/header pair. It rotates the refresh token. 200 example: `{ accessToken, user, requestId }`. A missing or mismatched CSRF header returns `CSRF_INVALID`.",
+            "url": "{{baseUrl}}/auth/refresh"
+          }
+        },
+        {
+          "name": "Logout current session",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Origin", "value": "http://localhost:5173" },
+              { "key": "X-CSRF-Token", "value": "{{csrfToken}}" }
+            ],
+            "description": "Requires the same cookie/Origin/CSRF checks as Refresh. Revokes the current refresh session and clears auth cookies. Success is `204 No Content` (there is no JSON body).",
+            "url": "{{baseUrl}}/auth/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get my profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "description": "Returns the authenticated user's safe profile DTO and relation counts. 200 example: `{ profile, requestId }`.",
+            "url": "{{baseUrl}}/users/me"
+          }
+        },
+        {
+          "name": "Update my profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "description": "Updates only the authenticated profile. At least one allowed field is required; blank bio/avatar normalize to null. 200 example: `{ profile, requestId }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Alice API Demo\",\n  \"bio\": \"Testing CloneInsta through Postman\",\n  \"avatarUrl\": null\n}"
+            },
+            "url": "{{baseUrl}}/users/me"
+          }
+        },
+        {
+          "name": "Search users",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "description": "Searches ACTIVE users by username/display name. `limit` is 1-20 (default 10); pass the opaque `pageInfo.nextCursor` to get the next page. 200 example: `{ users: [], pageInfo: { nextCursor }, requestId }`.",
+            "url": "{{baseUrl}}/users/search?q=bob&limit=10"
+          }
+        },
+        {
+          "name": "Follow user",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "description": "Idempotently follows `userId`; self-follow is rejected. 200 example: `{ following: true, requestId }`.",
+            "url": "{{baseUrl}}/users/{{userId}}/follow"
+          }
+        },
+        {
+          "name": "Unfollow user",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "description": "Idempotently removes the current viewer's follow relation. 200 example: `{ following: false, requestId }`.",
+            "url": "{{baseUrl}}/users/{{userId}}/follow"
+          }
+        },
+        {
+          "name": "Block user",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "description": "Idempotently blocks the target and writes an audit record only for a real state change. A block hides that pair from direct-message lookup, creation, read, send, and realtime bootstrap. 200 example: `{ blocked: true, requestId }`.",
+            "url": "{{baseUrl}}/users/{{userId}}/block"
+          }
+        },
+        {
+          "name": "Unblock user",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "description": "Idempotently unblocks the target. Existing historic messages remain retained for audit. 200 example: `{ blocked: false, requestId }`.",
+            "url": "{{baseUrl}}/users/{{userId}}/block"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Posts and comments",
+      "item": [
+        {
+          "name": "Get feed",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "description": "Gets the stable cursor-paginated feed. `limit` is 1-20 (default 10); use a returned opaque cursor for the next request. 200 example: `{ posts: [], pageInfo: { nextCursor }, requestId }`.",
+            "url": "{{baseUrl}}/posts/feed?limit=10"
+          }
+        },
+        {
+          "name": "Get my posts",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "description": "Lists the current user's visible posts. 200 example: `{ posts: [], requestId }`.",
+            "url": "{{baseUrl}}/posts/me"
+          }
+        },
+        {
+          "name": "Get post detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "description": "Returns one visible post with the safe detail DTO. 200 example: `{ post, requestId }`.",
+            "url": "{{baseUrl}}/posts/{{postId}}"
+          }
+        },
+        {
+          "name": "Create post (multipart)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "description": "Send `multipart/form-data`; do not manually set the Content-Type boundary. `image` is required and is validated for size, MIME/magic bytes, dimensions, and generated storage filename. `caption` is optional and at most 2200 chars. 201 example: `{ post, requestId }`.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "caption",
+                  "value": "Post created through Postman",
+                  "type": "text"
+                },
+                { "key": "image", "type": "file", "src": "" }
+              ]
+            },
+            "url": "{{baseUrl}}/posts"
+          }
+        },
+        {
+          "name": "Like post",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "description": "Idempotently likes a visible post. 200 example: `{ liked: true, likeCount, requestId }`.",
+            "url": "{{baseUrl}}/posts/{{postId}}/likes"
+          }
+        },
+        {
+          "name": "Unlike post",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "description": "Idempotently removes the current viewer's like. 200 example: `{ liked: false, likeCount, requestId }`.",
+            "url": "{{baseUrl}}/posts/{{postId}}/likes"
+          }
+        },
+        {
+          "name": "Delete post",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "description": "Soft-deletes a post when the caller is its owner or an admin. 200 example: `{ deletedPostId, requestId }`.",
+            "url": "{{baseUrl}}/posts/{{postId}}"
+          }
+        },
+        {
+          "name": "Create comment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "description": "Creates a 1-1000 character comment on a visible post. 201 example: `{ comment, requestId }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"A safe API comment\"\n}"
+            },
+            "url": "{{baseUrl}}/posts/{{postId}}/comments"
+          }
+        },
+        {
+          "name": "Delete comment",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "description": "Deletes a comment when the caller owns the comment, owns its post, or is an admin. 200 example: `{ deletedCommentId, requestId }`.",
+            "url": "{{baseUrl}}/comments/{{commentId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "Report a user",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "description": "Creates a report for exactly one target: use one of `reportedUserId`, `reportedPostId`, or `reportedCommentId`, never two. Supported reasons: SPAM, HARASSMENT, HATE_SPEECH, VIOLENCE, NUDITY, SELF_HARM, IMPERSONATION, MISINFORMATION, OTHER. A real `REPORT_CREATED` audit record is written atomically with safe metadata only (reason, target id/type); direct-message content is not copied. 201 example: `{ report, requestId }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"HARASSMENT\",\n  \"reportedUserId\": \"{{userId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/reports"
+          }
+        },
+        {
+          "name": "Report a post",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "description": "Alternative exactly-one-target report request. 201 example: `{ report, requestId }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"SPAM\",\n  \"reportedPostId\": \"{{postId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/reports"
+          }
+        },
+        {
+          "name": "Report a comment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "description": "Alternative exactly-one-target report request. 201 example: `{ report, requestId }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"HATE_SPEECH\",\n  \"reportedCommentId\": \"{{commentId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/reports"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin moderation",
+      "item": [
+        {
+          "name": "List moderation reports",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "description": "ADMIN only. Lists reports using status `PENDING|RESOLVED|DISMISSED`, sort `newest|oldest`, limit 1-20, and opaque cursor pagination. 200 example: `{ reports: [], pageInfo: { nextCursor }, requestId }`. A normal token returns `FORBIDDEN`.",
+            "url": "{{baseUrl}}/admin/reports?status=PENDING&sort=newest&limit=10"
+          }
+        },
+        {
+          "name": "Dismiss moderation report",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "description": "ADMIN only. Dismisses the report; `note` is optional but, when provided, must be 1-500 chars. 200 example: `{ report, requestId }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Reviewed: no policy violation found.\"\n}"
+            },
+            "url": "{{baseUrl}}/admin/reports/{{reportId}}/dismiss"
+          }
+        },
+        {
+          "name": "Hide reported content",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "description": "ADMIN only. Hides the post/comment target and resolves the report. A nonblank 1-500 character audit note is required. 200 example: `{ report, requestId }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Hidden after moderation review.\"\n}"
+            },
+            "url": "{{baseUrl}}/admin/reports/{{reportId}}/hide-content"
+          }
+        },
+        {
+          "name": "Ban reported user",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "description": "ADMIN only. Bans the reported USER target and resolves the report; a nonblank 1-500 character audit note is required. 200 example: `{ report, requestId }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Banned after verified abuse report.\"\n}"
+            },
+            "url": "{{baseUrl}}/admin/reports/{{reportId}}/ban-user"
+          }
+        },
+        {
+          "name": "List audit logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "description": "ADMIN only. Filters by optional `action`, `actorId`, `entityType`, `entityId`, ISO datetimes `from`/`to`, `sort`, `limit` 1-50, and cursor. 200 example: `{ auditLogs: [], pageInfo: { nextCursor }, requestId }`. Metadata is deliberately safe and omits secrets/tokens/private message content.",
+            "url": "{{baseUrl}}/admin/audit-logs?action=REPORT_CREATED&sort=newest&limit=20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Conversations",
+      "item": [
+        {
+          "name": "List inbox conversations",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "description": "Lists accepted direct-message conversations for the current viewer. `folder` is `inbox|requests`; default inbox. `limit` is 1-20, default 20. 200 example: `{ conversations: [], pageInfo: { nextCursor }, requestId }`.",
+            "url": "{{baseUrl}}/conversations?folder=inbox&limit=20"
+          }
+        },
+        {
+          "name": "List message requests",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "description": "Lists pending direct-message requests for the current recipient. Request conversations cannot be replied to until accepted. 200 example: `{ conversations: [], pageInfo: { nextCursor }, requestId }`.",
+            "url": "{{baseUrl}}/conversations?folder=requests&limit=20"
+          }
+        },
+        {
+          "name": "Create or find direct conversation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "description": "Creates a direct thread or returns the existing one. A newly initiated contact can appear as a request for its recipient. Blocked pairs are intentionally hidden rather than exposing block state. 201 for a new conversation, 200 for reuse; both return `{ conversation, requestId }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"participantUserId\": \"{{userId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/conversations"
+          }
+        },
+        {
+          "name": "Get conversation messages",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "description": "Participant-only thread lookup with 1-20 message cursor pagination. 200 example: `{ conversation, messages: [], readState, pageInfo: { nextCursor }, requestId }`. Nonparticipants and blocked pairs do not gain thread access.",
+            "url": "{{baseUrl}}/conversations/{{conversationId}}/messages?limit=20"
+          }
+        },
+        {
+          "name": "Send conversation message",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "description": "Participant-only REST send, content 1-2000 chars. Pending requests cannot be answered until accepted; pair blocks also prevent sends. Sender burst protection can return `429 MESSAGE_RATE_LIMITED`. 201 example: `{ message, requestId }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Hello from the REST collection\"\n}"
+            },
+            "url": "{{baseUrl}}/conversations/{{conversationId}}/messages"
+          }
+        },
+        {
+          "name": "Mark conversation read",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "description": "Marks messages through the supplied visible message ID as read for the current participant. 200 example: `{ readState, requestId }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messageId\": \"{{messageId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/conversations/{{conversationId}}/read"
+          }
+        },
+        {
+          "name": "Accept message request",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "description": "Recipient-only action for a pending request. It moves the thread into Inbox and enables normal sending. 200 example: `{ conversation, requestId }`; the action creates a safe audit event.",
+            "url": "{{baseUrl}}/conversations/{{conversationId}}/request/accept"
+          }
+        },
+        {
+          "name": "Decline message request",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "description": "Recipient-only action for a pending request. It hides the request for that recipient while retaining minimal safe audit history. A later peer message may create a new request. 200 example: `{ conversationId, requestId }`.",
+            "url": "{{baseUrl}}/conversations/{{conversationId}}/request/decline"
+          }
+        }
+      ]
+    }
+  ]
+}
