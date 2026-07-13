@@ -57,6 +57,7 @@ graphify-out/
 .graphify_*
 .codex/
 .playwright-cli/
+output/playwright/
 
 # OS/editor
 .DS_Store
