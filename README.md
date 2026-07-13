@@ -63,6 +63,7 @@ Copy-Item server/.env.example server/.env
 npm run db:validate
 npm run db:migrate:dev
 npm run db:seed
+npm run mail:verify --workspace server
 npm run dev
 ```
 
@@ -84,16 +85,17 @@ After `npm run db:seed`, use these local-only accounts:
 
 ## Useful commands
 
-| Command                   | Purpose                                                               |
-| ------------------------- | --------------------------------------------------------------------- |
-| `npm run dev`             | Start the Express API and Vite client together.                       |
-| `npm run db:validate`     | Validate the Prisma schema.                                           |
-| `npm run db:migrate:dev`  | Apply development migrations to `cloneinsta`.                         |
-| `npm run db:migrate:test` | Recreate/apply migrations to the isolated `cloneinsta_test` database. |
-| `npm run db:seed`         | Restore safe local demo data.                                         |
-| `npm run lint`            | Run client and server linting.                                        |
-| `npm test`                | Run the full workspace test suite.                                    |
-| `npm run build`           | Type-check and build both workspaces.                                 |
+| Command                                  | Purpose                                                               |
+| ---------------------------------------- | --------------------------------------------------------------------- |
+| `npm run dev`                            | Start the Express API and Vite client together.                       |
+| `npm run db:validate`                    | Validate the Prisma schema.                                           |
+| `npm run db:migrate:dev`                 | Apply development migrations to `cloneinsta`.                         |
+| `npm run db:migrate:test`                | Recreate/apply migrations to the isolated `cloneinsta_test` database. |
+| `npm run db:seed`                        | Restore safe local demo data.                                         |
+| `npm run mail:verify --workspace server` | Send a local SMTP proof message and confirm Mailpit received it.      |
+| `npm run lint`                           | Run client and server linting.                                        |
+| `npm test`                               | Run the full workspace test suite.                                    |
+| `npm run build`                          | Type-check and build both workspaces.                                 |
 
 For the standard local verification pass:
 
@@ -133,13 +135,14 @@ route -> controller -> Zod schema -> service -> repository -> Prisma/PostgreSQL
 - Safe DTOs avoid returning password hashes, refresh tokens, or private audit metadata.
 - Refresh tokens are hashed in PostgreSQL and delivered only through HttpOnly cookies. Refresh and logout also require allowed-origin and CSRF checks.
 - Reports and sensitive messaging actions produce minimal audit metadata; direct-message text is never copied into a moderation report audit entry.
+- The mail boundary validates SMTP settings, keeps delivery failures generic, and writes no recipient, token, URL, or provider-error text to its failure log. `mail:verify` proves the local Mailpit path without adding an HTTP endpoint.
 
 See `instruction.html` locally for the student-focused explanation of the data flow, testing strategy, edge cases, and defense notes. `flag.md` and `plan.md` are intentionally local checkpoint files and are not part of the GitHub repository.
 
 ## Quality gates
 
-GitHub Actions runs `npm ci`, Prisma validation, test-database migrations, lint, tests, and build on pushes and pull requests to `main`. CodeQL scans the JavaScript/TypeScript source on pushes, pull requests, and a weekly schedule; Dependabot monitors npm, GitHub Actions, and Docker Compose dependencies weekly. Local browser QA uses `http://localhost:5173` and re-seeds the demo database after flows that mutate it.
+GitHub Actions runs `npm ci`, Prisma validation, test-database migrations, lint, tests (including the isolated mail-boundary regressions), and build on pushes and pull requests to `main`. CodeQL scans the JavaScript/TypeScript source on pushes, pull requests, and a weekly schedule; Dependabot monitors npm, GitHub Actions, and Docker Compose dependencies weekly. Run `npm run mail:verify --workspace server` locally when Mailpit delivery itself needs proving. Local browser QA uses `http://localhost:5173` and re-seeds the demo database after flows that mutate it.
 
 ## Scope
 
-CloneInsta is GitHub-ready and local-run first. It is not presented as a production deployment: hosted infrastructure, email verification/password reset, notifications, private accounts, and broader social features remain outside the current project scope.
+CloneInsta is GitHub-ready and local-run first. The account-lifecycle milestone is in progress: its local SMTP/Mailpit foundation exists, while email-verification and password-reset persistence, routes, and UI are still pending. It is not presented as a production deployment: hosted infrastructure, notifications, private accounts, and broader social features remain outside the current project scope.

@@ -12,7 +12,8 @@
     "prisma:validate": "prisma validate --config prisma.config.ts",
     "prisma:migrate:dev": "prisma migrate dev --config prisma.config.ts",
     "prisma:migrate:test": "node scripts/prisma-migrate-test.js",
-    "prisma:seed": "node --import tsx prisma/seed.ts"
+    "prisma:seed": "node --import tsx prisma/seed.ts",
+    "mail:verify": "node --import tsx scripts/verify-mailpit-delivery.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",
@@ -23,6 +24,7 @@
     "image-size": "^2.0.2",
     "jose": "^6.2.3",
     "multer": "^2.2.0",
+    "nodemailer": "^9.0.3",
     "pg": "^8.21.0",
     "socket.io": "^4.8.3",
     "zod": "^3.25.56"
@@ -31,6 +33,7 @@
     "@types/express": "^5.0.3",
     "@types/multer": "^2.1.0",
     "@types/node": "^24.0.10",
+    "@types/nodemailer": "^8.0.1",
     "@types/supertest": "^6.0.3",
     "prisma": "^7.8.0",
     "socket.io-client": "^4.8.3",

@@ -4,16 +4,16 @@ This project is local-first. Docker is used first for local infrastructure, then
 
 ## Current Docker Services
 
-| Service | Purpose | Host URL / Port |
-| --- | --- | --- |
-| postgres | Local PostgreSQL database for Prisma and backend integration tests | `localhost:5432` |
-| mailpit | Local SMTP catcher for future email verification/password reset flows | UI: `http://localhost:8025`, SMTP: `localhost:1025` |
+| Service  | Purpose                                                                                  | Host URL / Port                                     |
+| -------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| postgres | Local PostgreSQL database for Prisma and backend integration tests                       | `localhost:5432`                                    |
+| mailpit  | Local SMTP catcher for the current mail-boundary proof and later account-lifecycle flows | UI: `http://localhost:8025`, SMTP: `localhost:1025` |
 
 The Postgres init script creates two local databases:
 
-| Database | Purpose |
-| --- | --- |
-| `cloneinsta` | Normal local development |
+| Database          | Purpose                                |
+| ----------------- | -------------------------------------- |
+| `cloneinsta`      | Normal local development               |
 | `cloneinsta_test` | Integration tests and Prisma test runs |
 
 ## Start Local Infrastructure
@@ -53,22 +53,32 @@ DATABASE_URL="postgresql://cloneinsta:cloneinsta_dev_password@postgres:5432/clon
 TEST_DATABASE_URL="postgresql://cloneinsta:cloneinsta_dev_password@postgres:5432/cloneinsta_test?schema=public"
 ```
 
-Future email settings for host-run backend:
+SMTP settings for the host-run backend:
 
 ```env
 SMTP_HOST="localhost"
 SMTP_PORT="1025"
 SMTP_SECURE="false"
+SMTP_FROM="noreply@cloneinsta.local"
 ```
 
-Future email settings for Compose-run backend:
+If the backend later runs inside Docker Compose, use the `mailpit` service hostname:
 
 ```env
 SMTP_HOST="mailpit"
 SMTP_PORT="1025"
 SMTP_SECURE="false"
+SMTP_FROM="noreply@cloneinsta.local"
 ```
 
-## Expected Next Step After Scaffold
+## Prove Local Email Delivery
 
-After `client/` and `server/` exist, keep this Compose file as the source of local PostgreSQL and Mailpit. Add app containers only if Dockerized app startup becomes part of the grading/demo requirement.
+After Mailpit is running, execute:
+
+```bash
+npm run mail:verify --workspace server
+```
+
+The command sends a safe fixed test message through the configured SMTP boundary and polls Mailpit's local API for the exact subject. It prints `Mailpit SMTP delivery proof passed.` only after Mailpit receives that message. It does not create application data, HTTP endpoints, action tokens, or UI state.
+
+`MAILPIT_API_URL` is an optional command-only override for the Mailpit API and defaults to `http://localhost:8025/api/v1` for host-run development.
