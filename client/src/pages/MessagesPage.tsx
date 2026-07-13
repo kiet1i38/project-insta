@@ -12,19 +12,23 @@ import {
   blockUser,
   createConversationMessage,
   createDirectConversation,
+  createReport,
   declineConversationRequest,
   getConversationMessages,
   getConversations,
   markConversationRead,
+  reportReasonValues,
   type ConversationMessage,
   type ConversationReadState,
-  type ConversationSummary
+  type ConversationSummary,
+  type ReportReason
 } from "../modules/auth/authApi";
 import { createMessagesRealtimeClient } from "../modules/messages/messagesRealtime";
 import { useAuthSession } from "../modules/auth/authSessionContext";
 
 const conversationPageSize = 10;
 const messagePageSize = 20;
+const defaultReportReason: ReportReason = "SPAM";
 type MessagesFolderView = "inbox" | "requests";
 
 type MessagesThreadState = {
@@ -221,9 +225,15 @@ export function MessagesPage() {
     useState(false);
   const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
   const [isLoadingThread, setIsLoadingThread] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isReportingPeer, setIsReportingPeer] = useState(false);
   const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [isRespondingToRequest, setIsRespondingToRequest] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportNotice, setReportNotice] = useState<string | null>(null);
+  const [reportReason, setReportReason] =
+    useState<ReportReason>(defaultReportReason);
   const [thread, setThread] = useState<MessagesThreadState | null>(null);
   const [threadError, setThreadError] = useState<string | null>(null);
   const [conversationsPageInfo, setConversationsPageInfo] = useState<{
@@ -860,6 +870,54 @@ export function MessagesPage() {
     }
   }
 
+  function openReportPeerModal(): void {
+    setReportError(null);
+    setReportNotice(null);
+    setReportReason(defaultReportReason);
+    setIsReportModalOpen(true);
+  }
+
+  function closeReportPeerModal(): void {
+    if (isReportingPeer) {
+      return;
+    }
+
+    setIsReportModalOpen(false);
+    setReportError(null);
+  }
+
+  async function handleSubmitPeerReport(
+    event: FormEvent<HTMLFormElement>
+  ): Promise<void> {
+    event.preventDefault();
+
+    if (!thread) {
+      return;
+    }
+
+    setIsReportingPeer(true);
+    setReportError(null);
+    setThreadError(null);
+
+    try {
+      await createReport({
+        reason: reportReason,
+        reportedUserId: thread.conversation.peer.id
+      });
+      setIsReportModalOpen(false);
+      setReportNotice("Report submitted for moderation.");
+    } catch (error) {
+      setReportError(
+        getErrorMessage(
+          error,
+          "Could not submit the report right now. Please try again."
+        )
+      );
+    } finally {
+      setIsReportingPeer(false);
+    }
+  }
+
   return (
     <section
       className="panel messages-page"
@@ -1080,27 +1138,42 @@ export function MessagesPage() {
                   </div>
                 </div>
 
-                <Link
-                  className="secondary-inline-link messages-thread-back-link"
-                  to={
-                    thread.conversation.folder === "REQUESTS"
-                      ? "/messages?view=requests"
-                      : "/messages"
-                  }
-                >
-                  Back to inbox
-                </Link>
-                <button
-                  className="secondary-button"
-                  disabled={isBlockingPeer}
-                  onClick={() => void handleBlockPeer()}
-                  type="button"
-                >
-                  {isBlockingPeer
-                    ? "Blocking..."
-                    : `Block @${thread.conversation.peer.username}`}
-                </button>
+                <div className="messages-thread-actions">
+                  <Link
+                    className="secondary-inline-link messages-thread-back-link"
+                    to={
+                      thread.conversation.folder === "REQUESTS"
+                        ? "/messages?view=requests"
+                        : "/messages"
+                    }
+                  >
+                    Back to inbox
+                  </Link>
+                  <button
+                    className="secondary-button"
+                    onClick={openReportPeerModal}
+                    type="button"
+                  >
+                    Report @{thread.conversation.peer.username}
+                  </button>
+                  <button
+                    className="secondary-button"
+                    disabled={isBlockingPeer}
+                    onClick={() => void handleBlockPeer()}
+                    type="button"
+                  >
+                    {isBlockingPeer
+                      ? "Blocking..."
+                      : `Block @${thread.conversation.peer.username}`}
+                  </button>
+                </div>
               </div>
+
+              {reportNotice ? (
+                <p className="form-status" data-tone="success" role="status">
+                  {reportNotice}
+                </p>
+              ) : null}
 
               {thread.pageInfo.hasNextPage ? (
                 <button
@@ -1231,6 +1304,73 @@ export function MessagesPage() {
           ) : null}
         </section>
       </div>
+
+      {isReportModalOpen && thread ? (
+        <div className="report-modal-backdrop" role="presentation">
+          <div
+            aria-labelledby="thread-report-title"
+            aria-modal="true"
+            className="report-modal-card"
+            role="dialog"
+          >
+            <form
+              noValidate
+              onSubmit={(event) => void handleSubmitPeerReport(event)}
+            >
+              <div className="report-modal-header">
+                <p className="messages-kicker">Safety</p>
+                <h3 id="thread-report-title">
+                  Report @{thread.conversation.peer.username}
+                </h3>
+                <p>
+                  This reports the account for moderation. It does not copy
+                  private message content into the report.
+                </p>
+              </div>
+
+              <label className="form-field" htmlFor="thread-report-reason">
+                <span>Reason</span>
+                <select
+                  id="thread-report-reason"
+                  onChange={(event) =>
+                    setReportReason(event.currentTarget.value as ReportReason)
+                  }
+                  value={reportReason}
+                >
+                  {reportReasonValues.map((reason) => (
+                    <option key={reason} value={reason}>
+                      {reason.replaceAll("_", " ")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {reportError ? (
+                <p className="form-status" data-tone="error" role="status">
+                  {reportError}
+                </p>
+              ) : null}
+
+              <div className="report-modal-actions">
+                <button
+                  className="button-link-inline secondary-inline-link"
+                  onClick={closeReportPeerModal}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  className="primary-button"
+                  disabled={isReportingPeer}
+                  type="submit"
+                >
+                  {isReportingPeer ? "Submitting..." : "Submit report"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

@@ -1,5 +1,5 @@
 import userEvent from "@testing-library/user-event";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 
@@ -903,7 +903,8 @@ describe("Messages UI", () => {
       .mocked(globalThis.fetch)
       .mock.calls.find(
         ([requestInput, requestInit]) =>
-          requestInput === "http://localhost:3001/api/v1/users/user-bob/block" &&
+          requestInput ===
+            "http://localhost:3001/api/v1/users/user-bob/block" &&
           requestInit?.method === "POST"
       );
 
@@ -912,5 +913,163 @@ describe("Messages UI", () => {
     expect(blockHeaders.get("Authorization")).toBe(
       "Bearer messages-access-token"
     );
+  });
+
+  it("reports the thread peer through the existing user-report contract", async () => {
+    const user = userEvent.setup();
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (input === "http://localhost:3001/api/v1/auth/refresh") {
+        return jsonResponse({
+          accessToken: "messages-access-token",
+          requestId: "req-messages-refresh",
+          user: demoUser
+        });
+      }
+
+      if (
+        input === "http://localhost:3001/api/v1/conversations?limit=10" &&
+        init?.method === "GET"
+      ) {
+        return jsonResponse({
+          conversations: [
+            {
+              folder: "INBOX",
+              id: "conversation-report-peer",
+              lastMessage: {
+                content: "This is the current thread preview.",
+                createdAt: "2026-07-13T07:00:00.000Z",
+                id: "message-report-peer",
+                senderId: "user-bob"
+              },
+              peer: {
+                avatarUrl: null,
+                displayName: "Bob Demo",
+                id: "user-bob",
+                username: "bob_demo"
+              },
+              unreadCount: 0,
+              updatedAt: "2026-07-13T07:00:00.000Z"
+            }
+          ],
+          pageInfo: {
+            hasNextPage: false,
+            limit: 10,
+            nextCursor: null
+          },
+          requestId: "req-messages-inbox"
+        });
+      }
+
+      if (
+        input ===
+          "http://localhost:3001/api/v1/conversations/conversation-report-peer/messages?limit=20" &&
+        init?.method === "GET"
+      ) {
+        return jsonResponse({
+          conversation: {
+            folder: "INBOX",
+            id: "conversation-report-peer",
+            peer: {
+              avatarUrl: null,
+              displayName: "Bob Demo",
+              id: "user-bob",
+              username: "bob_demo"
+            }
+          },
+          messages: [],
+          pageInfo: {
+            hasNextPage: false,
+            limit: 20,
+            nextCursor: null
+          },
+          readState: {
+            conversationId: "conversation-report-peer",
+            lastReadAt: null,
+            lastReadMessageId: null
+          },
+          requestId: "req-messages-thread"
+        });
+      }
+
+      if (
+        input === "http://localhost:3001/api/v1/reports" &&
+        init?.method === "POST"
+      ) {
+        return jsonResponse(
+          {
+            report: {
+              createdAt: "2026-07-13T07:03:00.000Z",
+              id: "report-thread-peer",
+              reason: "HARASSMENT",
+              reportedCommentId: null,
+              reportedPostId: null,
+              reportedUserId: "user-bob",
+              reporterId: demoUser.id,
+              status: "PENDING"
+            },
+            requestId: "req-report-thread-peer"
+          },
+          201
+        );
+      }
+
+      throw new Error(
+        `Unexpected fetch request: ${String(input)} ${String(init?.method)}`
+      );
+    });
+
+    document.cookie = "cloneinsta_csrf=csrf-messages; path=/";
+    window.history.pushState({}, "", "/messages/conversation-report-peer");
+
+    render(<App />);
+
+    await user.click(
+      await screen.findByRole("button", { name: /report @bob_demo/i })
+    );
+
+    const dialog = await screen.findByRole("dialog", {
+      name: /report @bob_demo/i
+    });
+
+    await user.selectOptions(
+      dialog.querySelector("select") as HTMLSelectElement,
+      "HARASSMENT"
+    );
+    await user.click(
+      within(dialog).getByRole("button", { name: /submit report/i })
+    );
+
+    expect(
+      await screen.findByText(/report submitted for moderation\./i)
+    ).toBeInTheDocument();
+
+    const reportCall = vi
+      .mocked(globalThis.fetch)
+      .mock.calls.find(
+        ([requestInput, requestInit]) =>
+          requestInput === "http://localhost:3001/api/v1/reports" &&
+          requestInit?.method === "POST"
+      );
+
+    expect(reportCall).toBeDefined();
+    const reportHeaders = reportCall?.[1]?.headers as Headers;
+    const reportBody = JSON.parse(
+      (reportCall?.[1]?.body as string) ?? "{}"
+    ) as {
+      reason?: string;
+      reportedUserId?: string;
+    };
+
+    expect(reportHeaders.get("Authorization")).toBe(
+      "Bearer messages-access-token"
+    );
+    expect(reportBody).toEqual({
+      reason: "HARASSMENT",
+      reportedUserId: "user-bob"
+    });
+    expect(
+      screen.queryByRole("dialog", { name: /report @bob_demo/i })
+    ).not.toBeInTheDocument();
   });
 });

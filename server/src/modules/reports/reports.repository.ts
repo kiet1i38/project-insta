@@ -33,15 +33,40 @@ function buildTargetWhereClause(
   };
 }
 
-export async function createReportRecord(
+export async function createReportWithAuditRecord(
   input: ReportTargetIdentity & {
+    actorMetadata: Prisma.InputJsonValue;
+    ipAddress: string | null;
     reason: ReportReason;
     reporterId: string;
+    userAgent: string | null;
   }
 ): Promise<ReportRecord> {
-  return prisma.report.create({
-    data: input,
-    select: reportSelect
+  return prisma.$transaction(async (transaction) => {
+    const report = await transaction.report.create({
+      data: {
+        reason: input.reason,
+        reportedCommentId: input.reportedCommentId,
+        reportedPostId: input.reportedPostId,
+        reportedUserId: input.reportedUserId,
+        reporterId: input.reporterId
+      },
+      select: reportSelect
+    });
+
+    await transaction.auditLog.create({
+      data: {
+        action: "REPORT_CREATED",
+        actorId: input.reporterId,
+        actorMetadata: input.actorMetadata,
+        entityId: report.id,
+        entityType: "REPORT",
+        ipAddress: input.ipAddress,
+        userAgent: input.userAgent
+      }
+    });
+
+    return report;
   });
 }
 

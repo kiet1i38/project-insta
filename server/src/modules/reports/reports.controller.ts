@@ -3,14 +3,20 @@ import { createUnauthorizedError } from "../auth/auth.errors.js";
 import { createReportBodySchema } from "./reports.schema.js";
 import { createReport } from "./reports.service.js";
 
-function toValidationDetails(issues: Array<{ message: string; path: PropertyKey[] }>) {
+function toValidationDetails(
+  issues: Array<{ message: string; path: PropertyKey[] }>
+) {
   return issues.map((issue) => ({
     message: issue.message,
     path: issue.path.join(".")
   }));
 }
 
-export const createReportController: RequestHandler = async (req, res, next) => {
+export const createReportController: RequestHandler = async (
+  req,
+  res,
+  next
+) => {
   const parsedBody = createReportBodySchema.safeParse(req.body);
 
   if (!parsedBody.success) {
@@ -31,6 +37,10 @@ export const createReportController: RequestHandler = async (req, res, next) => 
     }
 
     const report = await createReport({
+      auditContext: {
+        ipAddress: req.ip || null,
+        userAgent: req.get("user-agent") ?? null
+      },
       reason: parsedBody.data.reason,
       reportedCommentId: parsedBody.data.reportedCommentId,
       reportedPostId: parsedBody.data.reportedPostId,

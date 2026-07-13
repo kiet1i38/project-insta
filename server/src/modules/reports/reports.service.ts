@@ -1,10 +1,11 @@
+import type { Prisma } from "../../generated/prisma/client.js";
 import { AppError } from "../../lib/appError.js";
 import { findActiveCommentById } from "../comments/comments.repository.js";
 import { findActivePostById } from "../posts/posts.repository.js";
 import { findActiveUserById } from "../users/users.repository.js";
 import {
   countRecentReportsByReporter,
-  createReportRecord,
+  createReportWithAuditRecord,
   findPendingReportByReporterAndTarget,
   type ReportRecord
 } from "./reports.repository.js";
@@ -28,6 +29,11 @@ type ReportTargetIdentity = {
   reportedCommentId: string | null;
   reportedPostId: string | null;
   reportedUserId: string | null;
+};
+
+type ReportAuditContext = {
+  ipAddress: string | null;
+  userAgent: string | null;
 };
 
 function createReportAlreadyExistsError(): AppError {
@@ -67,6 +73,37 @@ function toReportDto(report: ReportRecord): ReportDto {
   };
 }
 
+function toReportAuditMetadata(input: {
+  reason: CreateReportBodyInput["reason"];
+  target: ReportTargetIdentity;
+}): Prisma.InputJsonObject {
+  if (input.target.reportedPostId) {
+    return {
+      reason: input.reason,
+      targetEntityId: input.target.reportedPostId,
+      targetEntityType: "POST"
+    };
+  }
+
+  if (input.target.reportedCommentId) {
+    return {
+      reason: input.reason,
+      targetEntityId: input.target.reportedCommentId,
+      targetEntityType: "COMMENT"
+    };
+  }
+
+  if (input.target.reportedUserId) {
+    return {
+      reason: input.reason,
+      targetEntityId: input.target.reportedUserId,
+      targetEntityType: "USER"
+    };
+  }
+
+  throw createReportTargetNotFoundError();
+}
+
 async function resolveReportTarget(
   input: Pick<
     CreateReportBodyInput,
@@ -88,7 +125,9 @@ async function resolveReportTarget(
   }
 
   if (input.reportedCommentId) {
-    const existingComment = await findActiveCommentById(input.reportedCommentId);
+    const existingComment = await findActiveCommentById(
+      input.reportedCommentId
+    );
 
     if (!existingComment) {
       throw createReportTargetNotFoundError();
@@ -119,6 +158,7 @@ async function resolveReportTarget(
 }
 
 export async function createReport(input: {
+  auditContext: ReportAuditContext;
   reason: CreateReportBodyInput["reason"];
   reporterId: string;
   reportedCommentId?: string | null;
@@ -149,10 +189,16 @@ export async function createReport(input: {
     throw createReportRateLimitedError();
   }
 
-  const createdReport = await createReportRecord({
+  const createdReport = await createReportWithAuditRecord({
+    actorMetadata: toReportAuditMetadata({
+      reason: input.reason,
+      target
+    }),
+    ipAddress: input.auditContext.ipAddress,
     reason: input.reason,
     reporterId: input.reporterId,
-    ...target
+    ...target,
+    userAgent: input.auditContext.userAgent
   });
 
   return toReportDto(createdReport);

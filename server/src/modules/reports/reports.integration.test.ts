@@ -6,13 +6,15 @@ import { hashPassword } from "../auth/password.js";
 
 const allowedOrigin = "http://localhost:5173";
 
-async function createUserFixture(overrides: {
-  email?: string;
-  password?: string;
-  role?: "USER" | "ADMIN";
-  status?: "ACTIVE" | "BANNED";
-  username?: string;
-} = {}) {
+async function createUserFixture(
+  overrides: {
+    email?: string;
+    password?: string;
+    role?: "USER" | "ADMIN";
+    status?: "ACTIVE" | "BANNED";
+    username?: string;
+  } = {}
+) {
   const password = overrides.password ?? "Password123!";
   const passwordHash = await hashPassword(password);
 
@@ -53,7 +55,8 @@ async function createPostFixture(overrides: {
       authorId: overrides.authorId,
       caption: overrides.caption ?? null,
       deletedAt: overrides.deletedAt ?? null,
-      imageUrl: overrides.imageUrl ?? "https://cdn.example.com/posts/report.png",
+      imageUrl:
+        overrides.imageUrl ?? "https://cdn.example.com/posts/report.png",
       isHidden: overrides.isHidden ?? false
     }
   });
@@ -135,6 +138,59 @@ describe("reports API", () => {
       status: "PENDING"
     });
     expect(createdReport.resolvedAt).toBeNull();
+  });
+
+  test("POST /api/v1/reports records safe moderation audit context for a reported user", async () => {
+    const reporter = await createUserFixture({
+      email: "thread-reporter@example.com",
+      username: "thread_reporter"
+    });
+    const reportedUser = await createUserFixture({
+      email: "thread-reported@example.com",
+      username: "thread_reported"
+    });
+    const accessToken = await loginAndGetAccessToken(
+      reporter.user.email,
+      reporter.password
+    );
+
+    const response = await request(app)
+      .post("/api/v1/reports")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .set("User-Agent", "vitest/thread-report")
+      .send({
+        reason: "HARASSMENT",
+        reportedUserId: reportedUser.user.id
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.report).toMatchObject({
+      reason: "HARASSMENT",
+      reportedCommentId: null,
+      reportedPostId: null,
+      reportedUserId: reportedUser.user.id,
+      reporterId: reporter.user.id,
+      status: "PENDING"
+    });
+
+    const auditLog = await prisma.auditLog.findFirstOrThrow({
+      where: {
+        action: "REPORT_CREATED",
+        entityId: response.body.report.id as string
+      }
+    });
+
+    expect(auditLog).toMatchObject({
+      action: "REPORT_CREATED",
+      actorId: reporter.user.id,
+      entityType: "REPORT",
+      userAgent: "vitest/thread-report"
+    });
+    expect(auditLog.actorMetadata).toEqual({
+      reason: "HARASSMENT",
+      targetEntityId: reportedUser.user.id,
+      targetEntityType: "USER"
+    });
   });
 
   test("POST /api/v1/reports rejects a body with no report target", async () => {
