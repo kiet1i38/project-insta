@@ -92,6 +92,29 @@ export const emailVerificationConfirmSchema = z.object({
     .max(200, "Verification token is invalid.")
 });
 
+export const passwordResetRequestSchema = z.object({
+  email: emailSchema
+});
+
+export const passwordResetConfirmSchema = z
+  .object({
+    confirmPassword: z.string(),
+    password: passwordSchema,
+    token: z
+      .string()
+      .trim()
+      .min(1, "Password reset token is required.")
+      .max(200, "Password reset token is invalid.")
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match.",
+    path: ["confirmPassword"]
+  })
+  .transform((data) => ({
+    password: data.password,
+    token: data.token
+  }));
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type EmailVerificationRequestInput = z.infer<
@@ -99,4 +122,10 @@ export type EmailVerificationRequestInput = z.infer<
 >;
 export type EmailVerificationConfirmInput = z.infer<
   typeof emailVerificationConfirmSchema
+>;
+export type PasswordResetRequestInput = z.infer<
+  typeof passwordResetRequestSchema
+>;
+export type PasswordResetConfirmInput = z.infer<
+  typeof passwordResetConfirmSchema
 >;

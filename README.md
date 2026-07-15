@@ -6,7 +6,7 @@ It is designed to be easy to run locally, demonstrate safely, and explain in an 
 
 ## Highlights
 
-- Pending-email registration, local Mailpit verification, login after activation, short-lived access tokens, rotating HttpOnly refresh cookies, CSRF checks, and role guards.
+- Pending-email registration, local Mailpit verification, password reset, short-lived access tokens, rotating HttpOnly refresh cookies, CSRF checks, and role guards.
 - Profile editing, safe user search, follow/block controls, image posts, cursor-paginated feed, likes, and comments.
 - Report submission, moderation queue, safe audit logs, and admin-only actions.
 - Direct messaging with REST persistence, Socket.IO updates, message requests, read state, rate limits, block safety, and user-report hooks.
@@ -71,7 +71,7 @@ Open the app at [http://localhost:5173](http://localhost:5173). The API health e
 
 The default local values in the example environment files use the Docker Compose PostgreSQL database. Do not commit the copied `.env` files.
 
-## Local email verification (M11B)
+## Local account recovery (M11B–M11C)
 
 New registrations are created as `PENDING_VERIFICATION`; they cannot sign in until their email address is confirmed. Registration sends the local verification message to Mailpit, not to a public inbox.
 
@@ -80,7 +80,9 @@ New registrations are created as `PENDING_VERIFICATION`; they cannot sign in unt
 3. Send that value to `POST /api/v1/auth/email-verification/confirm` as `{ "token": "..." }`.
 4. The response returns the safe user DTO with `status: "ACTIVE"` and `emailVerifiedAt`; normal login can then proceed.
 
-The email link is deliberately built from `PUBLIC_APP_URL` (local default: `http://localhost:5173`) rather than the inbound request host. M11B does not yet include a `/verify-email` browser page, so use the confirmation endpoint or the Postman request after copying the token. Password reset is also outside this slice.
+The email link is deliberately built from `PUBLIC_APP_URL` (local default: `http://localhost:5173`) rather than the inbound request host. M11B does not yet include a `/verify-email` browser page, so use the confirmation endpoint or the Postman request after copying the token.
+
+Active accounts can also use `POST /api/v1/auth/password-reset/request` with `{ "email": "..." }`. The endpoint always returns the same `202` response for active, pending, banned, and unknown addresses. For an active account, Mailpit receives a 60-minute reset link. Copy its token to `POST /api/v1/auth/password-reset/confirm` with `{ "token": "...", "password": "NewStrongPass123", "confirmPassword": "NewStrongPass123" }`. A successful reset changes the password and revokes every existing refresh session. The `PUBLIC_APP_URL/reset-password` target has no browser page until 11D.
 
 ## Demo accounts
 
@@ -123,9 +125,10 @@ The Prisma-backed server suites share `cloneinsta_test`, so do not run multiple 
 
 ## API and realtime demo
 
-Import [docs/postman_collection.json](docs/postman_collection.json) into Postman. It contains 40 practical requests covering all 37 implemented REST method/path contracts, including:
+Import [docs/postman_collection.json](docs/postman_collection.json) into Postman. It contains 42 practical requests covering all 39 implemented REST method/path contracts, including:
 
 - Pending registration plus request/resend and confirm-email verification helpers for local Mailpit.
+- Enumeration-safe password-reset request and confirmation helpers for local Mailpit.
 - Demo login helpers that save the access token after email verification.
 - Cookie, Origin, and CSRF requirements for refresh/logout.
 - User, post/comment, report, admin/audit, and conversation endpoints.
@@ -151,6 +154,7 @@ route -> controller -> Zod schema -> service -> repository -> Prisma/PostgreSQL
 - `POST /api/v1/auth/email-verification/request` is enumeration-safe: known pending and unknown/active addresses receive the same `202` response. A resend consumes older unused verification tokens before issuing a replacement.
 - Email confirmation is atomic, activates the pending account only once, and keeps raw emails, tokens, verification URLs, and SMTP/provider errors out of audit metadata and failure logs. `mail:verify` remains a separate SMTP/Mailpit boundary proof.
 - `PUBLIC_APP_URL` is the trusted base for email links (HTTPS is required in production). `ACCOUNT_ACTION_RATE_LIMIT_SECRET` HMAC-hashes email/IP rate-limit keys: verification requests are limited to 3 per 15 minutes per email and IP; confirmations are limited to 10 per 15 minutes per IP.
+- Password-reset requests use the same HMAC fingerprint policy and generic response for active, pending, banned, and unknown addresses. Reset tokens are SHA-256-hashed, one-time, expire after 60 minutes, and confirmation updates the password while revoking every active refresh session in one transaction.
 
 See `instruction.html` locally for the student-focused explanation of the data flow, testing strategy, edge cases, and defense notes. `flag.md` and `plan.md` are intentionally local checkpoint files and are not part of the GitHub repository.
 
@@ -160,4 +164,4 @@ GitHub Actions runs `npm ci`, Prisma validation, test-database migrations, lint,
 
 ## Scope
 
-CloneInsta is GitHub-ready and local-run first. M11B implements the backend email-verification lifecycle and local Mailpit flow; a browser verification screen and password reset are deliberately not included yet. It is not presented as a production deployment: Mailpit does not relay to public inboxes, and hosted infrastructure, notifications, private accounts, and broader social features remain outside the current project scope.
+CloneInsta is GitHub-ready and local-run first. M11B implements backend email verification and M11C implements backend password reset through local Mailpit; browser verification/reset screens remain 11D work. It is not presented as a production deployment: Mailpit does not relay to public inboxes, and hosted infrastructure, notifications, private accounts, and broader social features remain outside the current project scope.

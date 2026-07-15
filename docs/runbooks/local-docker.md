@@ -120,3 +120,34 @@ M11B adds backend email verification only. There is no browser confirmation page
 - Requests are limited to 3 per 15 minutes per HMAC-hashed email and IP. Confirmation attempts are limited to 10 per 15 minutes per HMAC-hashed IP. Exceeding either limit returns `429 AUTH_EMAIL_VERIFICATION_RATE_LIMITED`.
 - Invalid, expired, or already-consumed tokens return `400 AUTH_EMAIL_VERIFICATION_INVALID_OR_EXPIRED`. Pending-account login remains the generic `401 AUTH_INVALID_CREDENTIALS` response.
 - Mailpit is local-only. Do not use it to test delivery to `@gmail.com` or any public address; real public delivery needs a separately approved transactional provider and credentials.
+
+## Exercise M11C Password Reset Locally
+
+M11C adds backend password reset only. It uses the same local Mailpit inspection flow; there is no `/reset-password` client page until 11D.
+
+1. Use an existing active account such as `alice@cloneinsta.example`, then send `POST http://localhost:3001/api/v1/auth/password-reset/request`:
+
+   ```json
+   { "email": "alice@cloneinsta.example" }
+   ```
+
+   The response is always the same `202` message for active, pending, banned, and unknown addresses. This prevents account enumeration.
+2. In `http://localhost:8025`, open **Reset your CloneInsta password** and copy the `token` query parameter from the `${PUBLIC_APP_URL}/reset-password?token=...` link.
+3. Send `POST http://localhost:3001/api/v1/auth/password-reset/confirm`:
+
+   ```json
+   {
+     "token": "copied-token",
+     "password": "NewStrongPass123",
+     "confirmPassword": "NewStrongPass123"
+   }
+   ```
+
+   A `200` confirms the password reset. Sign in again with the new password; every prior refresh session was revoked.
+
+### M11C Security and Rate Limits
+
+- Reset tokens use 32 random bytes, are stored only as SHA-256 hashes, expire after 60 minutes, and a replacement consumes the prior unused reset token.
+- Request attempts are limited to 3 per 15 minutes per HMAC-hashed email and IP. Confirmation attempts are limited to 10 per 15 minutes per HMAC-hashed IP. The limit errors are `429 AUTH_PASSWORD_RESET_RATE_LIMITED`.
+- Invalid, expired, reused, or no-longer-active-account tokens return `400 AUTH_PASSWORD_RESET_INVALID_OR_EXPIRED`. Confirmation hashes the new password, changes it atomically, and revokes all unrevoked refresh sessions in the same transaction.
+- Audit rows contain only lifecycle action, user id, request id, IP, and user agent. Raw email, token, token hash, URL, password, and mail-provider error data are not recorded.

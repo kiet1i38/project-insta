@@ -20,11 +20,14 @@ enum UserStatus {
 
 enum ActionTokenPurpose {
   EMAIL_VERIFICATION
+  PASSWORD_RESET
 }
 
 enum AuthActionAttemptType {
   EMAIL_VERIFICATION_REQUEST
   EMAIL_VERIFICATION_CONFIRM
+  PASSWORD_RESET_REQUEST
+  PASSWORD_RESET_CONFIRM
 }
 
 enum ReportStatus {

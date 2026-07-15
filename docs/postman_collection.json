@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "f42f9e87-8d9e-4c80-905d-a78c0d9b7e13",
     "name": "CloneInsta API v1",
-    "description": "Import this collection after starting PostgreSQL and Mailpit, applying migrations, and running `npm run dev:server`. The REST base URL is `{{baseUrl}}`; protected requests require `Authorization: Bearer {{accessToken}}`. New registrations are `PENDING_VERIFICATION` and cannot log in until confirmed. To exercise M11B locally, set `verificationEmail` to a new unused address, run **Auth / Register**, open the local Mailpit UI at `http://localhost:8025`, copy the email link's `token` query value into `verificationToken`, then run **Auth / Confirm email verification**. The M11B link targets `PUBLIC_APP_URL/verify-email`, but no browser verification page exists yet.\n\nRun **Auth / Login as demo user** for normal protected calls: its test script stores the returned access token. Login also sets the HttpOnly refresh cookie and readable `cloneinsta_csrf` cookie. Before Refresh or Logout, copy that cookie value into `csrfToken` if Postman did not populate it automatically; those two endpoints require the cookie plus `Origin: http://localhost:5173` and `X-CSRF-Token: {{csrfToken}}`.\n\nSeed credentials: `alice_demo` / `UserDemo123!`, `bob_demo` / `UserDemo123!`, and `admin_demo` / `AdminDemo123!`. Use Alice for normal-user requests and log in as Admin for the Admin folder. The values in `userId`, `postId`, `commentId`, `conversationId`, `messageId`, and `reportId` are placeholders: copy IDs from a successful previous response. Cursor values are opaque base64url strings returned in `pageInfo.nextCursor`; never construct them manually.\n\nEvery successful payload includes `requestId`. Errors follow `{ error: { code, message }, requestId }`; validation errors also include `error.details`. Representative successful response shapes: verification request `{ message, requestId }`; verification confirm `{ user, requestId }`; login `{ accessToken, user, requestId }`; feed `{ posts, pageInfo, requestId }`; report `{ report, requestId }`; conversation list `{ conversations, pageInfo, requestId }`. All non-auth data routes are versioned below `/api/v1`. Socket.IO realtime events (conversation/message sync, send and read) are intentionally not included because this is a REST Postman collection.",
+    "description": "Import this collection after starting PostgreSQL and Mailpit, applying migrations, and running `npm run dev:server`. The REST base URL is `{{baseUrl}}`; protected requests require `Authorization: Bearer {{accessToken}}`. New registrations are `PENDING_VERIFICATION` and cannot log in until confirmed. To exercise M11B locally, set `verificationEmail` to a new unused address, run **Auth / Register**, open the local Mailpit UI at `http://localhost:8025`, copy the email link's `token` query value into `verificationToken`, then run **Auth / Confirm email verification**. The M11B link targets `PUBLIC_APP_URL/verify-email`, but no browser verification page exists yet. To exercise M11C, use an active account, run **Auth / Request password reset**, copy the local Mailpit link token into `passwordResetToken`, then run **Auth / Confirm password reset**. Its `PUBLIC_APP_URL/reset-password` link also has no browser page yet.\n\nRun **Auth / Login as demo user** for normal protected calls: its test script stores the returned access token. Login also sets the HttpOnly refresh cookie and readable `cloneinsta_csrf` cookie. Before Refresh or Logout, copy that cookie value into `csrfToken` if Postman did not populate it automatically; those two endpoints require the cookie plus `Origin: http://localhost:5173` and `X-CSRF-Token: {{csrfToken}}`.\n\nSeed credentials: `alice_demo` / `UserDemo123!`, `bob_demo` / `UserDemo123!`, and `admin_demo` / `AdminDemo123!`. Use Alice for normal-user requests and log in as Admin for the Admin folder. The values in `userId`, `postId`, `commentId`, `conversationId`, `messageId`, and `reportId` are placeholders: copy IDs from a successful previous response. Cursor values are opaque base64url strings returned in `pageInfo.nextCursor`; never construct them manually.\n\nEvery successful payload includes `requestId`. Errors follow `{ error: { code, message }, requestId }`; validation errors also include `error.details`. Representative successful response shapes: verification request `{ message, requestId }`; verification confirm `{ user, requestId }`; password-reset request/confirm `{ message, requestId }`; login `{ accessToken, user, requestId }`; feed `{ posts, pageInfo, requestId }`; report `{ report, requestId }`; conversation list `{ conversations, pageInfo, requestId }`. All non-auth data routes are versioned below `/api/v1`. Socket.IO realtime events (conversation/message sync, send and read) are intentionally not included because this is a REST Postman collection.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -11,6 +11,8 @@
     { "key": "csrfToken", "value": "" },
     { "key": "verificationEmail", "value": "postman.verify@example.test" },
     { "key": "verificationToken", "value": "" },
+    { "key": "passwordResetEmail", "value": "alice@cloneinsta.example" },
+    { "key": "passwordResetToken", "value": "" },
     { "key": "userId", "value": "11111111-1111-4111-8111-111111111111" },
     { "key": "postId", "value": "22222222-2222-4222-8222-222222222222" },
     { "key": "commentId", "value": "33333333-3333-4333-8333-333333333333" },
@@ -76,6 +78,32 @@
               "raw": "{\n  \"token\": \"{{verificationToken}}\"\n}"
             },
             "url": "{{baseUrl}}/auth/email-verification/confirm"
+          }
+        },
+        {
+          "name": "Request password reset",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "description": "Sends a 60-minute one-time password reset message only for an active account, but always returns the same 202 body for active, pending, banned, and unknown addresses to avoid account enumeration. A replacement consumes older unused reset tokens. Limited to 3 requests per 15 minutes per email and IP; exceeding the limit returns `429 AUTH_PASSWORD_RESET_RATE_LIMITED`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{passwordResetEmail}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/password-reset/request"
+          }
+        },
+        {
+          "name": "Confirm password reset",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "description": "Copy `token` from the local **Reset your CloneInsta password** Mailpit message into `passwordResetToken`. A valid token is one-time, expires after 60 minutes, changes the password atomically, and revokes all existing refresh sessions. 200 example: `{ message: \"Password reset successfully. Please sign in again.\", requestId }`. Invalid, expired, or reused tokens return `400 AUTH_PASSWORD_RESET_INVALID_OR_EXPIRED`; confirmations are limited to 10 per 15 minutes per IP.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{passwordResetToken}}\",\n  \"password\": \"NewStrongPass123\",\n  \"confirmPassword\": \"NewStrongPass123\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/password-reset/confirm"
           }
         },
         {

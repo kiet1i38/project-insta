@@ -1,9 +1,11 @@
 import { Router } from "express";
 import {
   confirmEmailVerificationController,
+  confirmPasswordResetController,
   loginController,
   logoutController,
   requestEmailVerificationController,
+  requestPasswordResetController,
   refreshController,
   registerController
 } from "./auth.controller.js";
@@ -24,6 +26,8 @@ authRouter.options("/refresh", handleAuthCorsPreflight);
 authRouter.options("/logout", handleAuthCorsPreflight);
 authRouter.options("/email-verification/request", handleAuthCorsPreflight);
 authRouter.options("/email-verification/confirm", handleAuthCorsPreflight);
+authRouter.options("/password-reset/request", handleAuthCorsPreflight);
+authRouter.options("/password-reset/confirm", handleAuthCorsPreflight);
 
 authRouter.post("/register", registerController);
 authRouter.post(
@@ -34,6 +38,8 @@ authRouter.post(
   "/email-verification/confirm",
   confirmEmailVerificationController
 );
+authRouter.post("/password-reset/request", requestPasswordResetController);
+authRouter.post("/password-reset/confirm", confirmPasswordResetController);
 authRouter.post("/login", loginController);
 authRouter.post("/refresh", requireCsrfProtection, refreshController);
 authRouter.post("/logout", requireCsrfProtection, logoutController);

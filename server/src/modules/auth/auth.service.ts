@@ -8,10 +8,13 @@ import {
 } from "../mail/mail.service.js";
 import {
   consumeEmailVerificationToken,
+  consumePasswordResetToken,
   createAuthActionAttemptIfAllowed,
   createEmailVerificationDeliveryFailureAuditLog,
   createEmailVerificationToken,
   createPendingUserWithEmailVerificationToken,
+  createPasswordResetDeliveryFailureAuditLog,
+  createPasswordResetToken,
   createRefreshTokenRecord,
   findRefreshTokenRecordById,
   findUserByEmail,
@@ -29,6 +32,8 @@ import {
   createIdentifierInUseError,
   createInvalidCredentialsError,
   createInvalidSessionError,
+  createPasswordResetInvalidOrExpiredError,
+  createPasswordResetRateLimitedError,
   createUsernameInUseError
 } from "./auth.errors.js";
 import { issueAccessToken } from "./accessToken.js";
@@ -56,6 +61,15 @@ type EmailVerificationRequestInput = {
 };
 
 type EmailVerificationConfirmInput = {
+  token: string;
+};
+
+type PasswordResetRequestInput = {
+  email: string;
+};
+
+type PasswordResetConfirmInput = {
+  password: string;
   token: string;
 };
 
@@ -89,6 +103,11 @@ export const EMAIL_VERIFICATION_CONFIRM_RATE_LIMIT_MAX = 10;
 export const EMAIL_VERIFICATION_REQUEST_RATE_LIMIT_MAX = 3;
 export const EMAIL_VERIFICATION_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 export const EMAIL_VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+export const PASSWORD_RESET_CONFIRM_RATE_LIMIT_MAX = 10;
+export const PASSWORD_RESET_REQUEST_RATE_LIMIT_MAX = 3;
+export const PASSWORD_RESET_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+export const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
+const PASSWORD_RESET_REQUEST_MIN_DURATION_MS = 100;
 
 function toAuthUserDto(user: User): AuthUserDto {
   return {
@@ -104,11 +123,11 @@ function toAuthUserDto(user: User): AuthUserDto {
   };
 }
 
-function issueEmailVerificationToken(): string {
+function issueActionToken(): string {
   return randomBytes(32).toString("base64url");
 }
 
-function hashVerificationToken(token: string): string {
+function hashActionToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
@@ -122,6 +141,26 @@ function createEmailVerificationUrl(token: string): string {
   const url = new URL("/verify-email", env.PUBLIC_APP_URL);
   url.searchParams.set("token", token);
   return url.toString();
+}
+
+function createPasswordResetUrl(token: string): string {
+  const url = new URL("/reset-password", env.PUBLIC_APP_URL);
+  url.searchParams.set("token", token);
+  return url.toString();
+}
+
+async function wait(milliseconds: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function applyPasswordResetRequestTimingFloor(
+  startedAt: number
+): Promise<void> {
+  const remaining = PASSWORD_RESET_REQUEST_MIN_DURATION_MS - (Date.now() - startedAt);
+
+  if (remaining > 0) {
+    await wait(remaining);
+  }
 }
 
 async function sendEmailVerificationMessage(input: {
@@ -145,6 +184,33 @@ async function sendEmailVerificationMessage(input: {
     }
 
     await createEmailVerificationDeliveryFailureAuditLog({
+      ...input.context,
+      userId: input.user.id
+    });
+  }
+}
+
+async function sendPasswordResetMessage(input: {
+  context: AuthRequestContext;
+  mail: MailService;
+  token: string;
+  user: User;
+}): Promise<void> {
+  const passwordResetUrl = createPasswordResetUrl(input.token);
+
+  try {
+    await input.mail.sendMail({
+      html: `<p>Reset your CloneInsta password.</p><p><a href="${passwordResetUrl}">Reset password</a></p><p>This link expires in 60 minutes.</p>`,
+      subject: "Reset your CloneInsta password",
+      text: `Reset your CloneInsta password: ${passwordResetUrl}\n\nThis link expires in 60 minutes.`,
+      to: input.user.email
+    });
+  } catch (error) {
+    if (!(error instanceof MailDeliveryError)) {
+      throw error;
+    }
+
+    await createPasswordResetDeliveryFailureAuditLog({
       ...input.context,
       userId: input.user.id
     });
@@ -184,6 +250,38 @@ async function assertEmailVerificationConfirmIsAllowed(
 
   if (!allowed) {
     throw createEmailVerificationRateLimitedError();
+  }
+}
+
+async function assertPasswordResetRequestIsAllowed(
+  email: string,
+  context: AuthRequestContext
+): Promise<void> {
+  const allowed = await createAuthActionAttemptIfAllowed({
+    emailHash: createRateLimitFingerprint(email),
+    ipHash: createRateLimitFingerprint(context.ipAddress),
+    maxAttempts: PASSWORD_RESET_REQUEST_RATE_LIMIT_MAX,
+    type: "PASSWORD_RESET_REQUEST",
+    windowStartedAt: new Date(Date.now() - PASSWORD_RESET_RATE_LIMIT_WINDOW_MS)
+  });
+
+  if (!allowed) {
+    throw createPasswordResetRateLimitedError();
+  }
+}
+
+async function assertPasswordResetConfirmIsAllowed(
+  context: AuthRequestContext
+): Promise<void> {
+  const allowed = await createAuthActionAttemptIfAllowed({
+    ipHash: createRateLimitFingerprint(context.ipAddress),
+    maxAttempts: PASSWORD_RESET_CONFIRM_RATE_LIMIT_MAX,
+    type: "PASSWORD_RESET_CONFIRM",
+    windowStartedAt: new Date(Date.now() - PASSWORD_RESET_RATE_LIMIT_WINDOW_MS)
+  });
+
+  if (!allowed) {
+    throw createPasswordResetRateLimitedError();
   }
 }
 
@@ -237,7 +335,7 @@ export async function registerUser(
   }
 
   const passwordHash = await hashPassword(input.password);
-  const token = issueEmailVerificationToken();
+  const token = issueActionToken();
 
   try {
     const user = await createPendingUserWithEmailVerificationToken({
@@ -246,7 +344,7 @@ export async function registerUser(
       email: input.email,
       expiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS),
       passwordHash,
-      tokenHash: hashVerificationToken(token),
+      tokenHash: hashActionToken(token),
       username: input.username
     });
 
@@ -276,12 +374,12 @@ export async function requestEmailVerification(
     return;
   }
 
-  const token = issueEmailVerificationToken();
+  const token = issueActionToken();
 
   await createEmailVerificationToken({
     ...context,
     expiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS),
-    tokenHash: hashVerificationToken(token),
+    tokenHash: hashActionToken(token),
     userId: user.id
   });
 
@@ -301,7 +399,7 @@ export async function confirmEmailVerification(
 
   const user = await consumeEmailVerificationToken({
     ...context,
-    tokenHash: hashVerificationToken(input.token)
+    tokenHash: hashActionToken(input.token)
   });
 
   if (!user) {
@@ -309,6 +407,59 @@ export async function confirmEmailVerification(
   }
 
   return toAuthUserDto(user);
+}
+
+export async function requestPasswordReset(
+  input: PasswordResetRequestInput,
+  context: AuthRequestContext,
+  mail: MailService = mailService
+): Promise<void> {
+  const startedAt = Date.now();
+
+  try {
+    await assertPasswordResetRequestIsAllowed(input.email, context);
+
+    const user = await findUserByEmail(input.email);
+
+    if (!user || user.status !== "ACTIVE") {
+      return;
+    }
+
+    const token = issueActionToken();
+
+    await createPasswordResetToken({
+      ...context,
+      expiresAt: new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS),
+      tokenHash: hashActionToken(token),
+      userId: user.id
+    });
+
+    await sendPasswordResetMessage({
+      context,
+      mail,
+      token,
+      user
+    });
+  } finally {
+    await applyPasswordResetRequestTimingFloor(startedAt);
+  }
+}
+
+export async function confirmPasswordReset(
+  input: PasswordResetConfirmInput,
+  context: AuthRequestContext
+): Promise<void> {
+  await assertPasswordResetConfirmIsAllowed(context);
+
+  const completed = await consumePasswordResetToken({
+    ...context,
+    passwordHash: await hashPassword(input.password),
+    tokenHash: hashActionToken(input.token)
+  });
+
+  if (!completed) {
+    throw createPasswordResetInvalidOrExpiredError();
+  }
 }
 
 export async function loginUser(

@@ -32,6 +32,8 @@ type CreateEmailVerificationTokenInput = LifecycleRequestContext & {
   userId: string;
 };
 
+type CreatePasswordResetTokenInput = CreateEmailVerificationTokenInput;
+
 type CreatePendingUserInput = Omit<
   CreateEmailVerificationTokenInput,
   "userId"
@@ -46,18 +48,27 @@ type AuthActionAttemptInput = {
   emailHash?: string;
   ipHash: string;
   maxAttempts: number;
-  type: "EMAIL_VERIFICATION_CONFIRM" | "EMAIL_VERIFICATION_REQUEST";
+  type:
+    | "EMAIL_VERIFICATION_CONFIRM"
+    | "EMAIL_VERIFICATION_REQUEST"
+    | "PASSWORD_RESET_CONFIRM"
+    | "PASSWORD_RESET_REQUEST";
   windowStartedAt: Date;
 };
 
 type PrismaTransactionClient = Prisma.TransactionClient;
+
+class PasswordResetUnavailableError extends Error {}
 
 function lifecycleAuditData(
   input: LifecycleRequestContext & {
     action:
       | "EMAIL_VERIFICATION_COMPLETED"
       | "EMAIL_VERIFICATION_DELIVERY_FAILED"
-      | "EMAIL_VERIFICATION_REQUESTED";
+      | "EMAIL_VERIFICATION_REQUESTED"
+      | "PASSWORD_RESET_COMPLETED"
+      | "PASSWORD_RESET_DELIVERY_FAILED"
+      | "PASSWORD_RESET_REQUESTED";
     userId: string;
   }
 ) {
@@ -80,7 +91,10 @@ async function createLifecycleAuditLog(
     action:
       | "EMAIL_VERIFICATION_COMPLETED"
       | "EMAIL_VERIFICATION_DELIVERY_FAILED"
-      | "EMAIL_VERIFICATION_REQUESTED";
+      | "EMAIL_VERIFICATION_REQUESTED"
+      | "PASSWORD_RESET_COMPLETED"
+      | "PASSWORD_RESET_DELIVERY_FAILED"
+      | "PASSWORD_RESET_REQUESTED";
     userId: string;
   }
 ): Promise<void> {
@@ -276,6 +290,133 @@ export async function createEmailVerificationDeliveryFailureAuditLog(
   await createLifecycleAuditLog(prisma, {
     ...input,
     action: "EMAIL_VERIFICATION_DELIVERY_FAILED"
+  });
+}
+
+export async function createPasswordResetToken(
+  input: CreatePasswordResetTokenInput
+): Promise<void> {
+  await prisma.$transaction(async (transaction) => {
+    const consumedAt = new Date();
+
+    await transaction.actionToken.updateMany({
+      where: {
+        consumedAt: null,
+        purpose: "PASSWORD_RESET",
+        userId: input.userId
+      },
+      data: {
+        consumedAt
+      }
+    });
+
+    await transaction.actionToken.create({
+      data: {
+        expiresAt: input.expiresAt,
+        purpose: "PASSWORD_RESET",
+        tokenHash: input.tokenHash,
+        userId: input.userId
+      }
+    });
+
+    await createLifecycleAuditLog(transaction, {
+      ...input,
+      action: "PASSWORD_RESET_REQUESTED"
+    });
+  });
+}
+
+export async function consumePasswordResetToken(
+  input: LifecycleRequestContext & {
+    passwordHash: string;
+    tokenHash: string;
+  }
+): Promise<boolean> {
+  try {
+    return await prisma.$transaction(async (transaction) => {
+      const now = new Date();
+      const token = await transaction.actionToken.findFirst({
+        where: {
+          consumedAt: null,
+          expiresAt: {
+            gt: now
+          },
+          purpose: "PASSWORD_RESET",
+          tokenHash: input.tokenHash,
+          user: {
+            status: "ACTIVE"
+          }
+        }
+      });
+
+      if (!token) {
+        return false;
+      }
+
+      const consumedToken = await transaction.actionToken.updateMany({
+        where: {
+          consumedAt: null,
+          expiresAt: {
+            gt: now
+          },
+          id: token.id
+        },
+        data: {
+          consumedAt: now
+        }
+      });
+
+      if (consumedToken.count !== 1) {
+        return false;
+      }
+
+      const updatedUser = await transaction.user.updateMany({
+        where: {
+          id: token.userId,
+          status: "ACTIVE"
+        },
+        data: {
+          passwordHash: input.passwordHash
+        }
+      });
+
+      if (updatedUser.count !== 1) {
+        throw new PasswordResetUnavailableError();
+      }
+
+      await transaction.refreshToken.updateMany({
+        where: {
+          revokedAt: null,
+          userId: token.userId
+        },
+        data: {
+          revokedAt: now
+        }
+      });
+
+      await createLifecycleAuditLog(transaction, {
+        ...input,
+        action: "PASSWORD_RESET_COMPLETED",
+        userId: token.userId
+      });
+
+      return true;
+    });
+  } catch (error) {
+    if (error instanceof PasswordResetUnavailableError) {
+      return false;
+    }
+
+    throw error;
+  }
+}
+
+export async function createPasswordResetDeliveryFailureAuditLog(
+  input: LifecycleRequestContext & { userId: string }
+): Promise<void> {
+  await createLifecycleAuditLog(prisma, {
+    ...input,
+    action: "PASSWORD_RESET_DELIVERY_FAILED"
   });
 }
 

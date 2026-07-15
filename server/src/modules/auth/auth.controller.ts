@@ -3,6 +3,8 @@ import {
   emailVerificationConfirmSchema,
   emailVerificationRequestSchema,
   loginSchema,
+  passwordResetConfirmSchema,
+  passwordResetRequestSchema,
   registerSchema
 } from "./auth.schema.js";
 import {
@@ -19,6 +21,8 @@ import {
   confirmEmailVerification,
   loginUser,
   logoutUserSession,
+  confirmPasswordReset,
+  requestPasswordReset,
   requestEmailVerification,
   refreshUserSession,
   registerUser
@@ -133,6 +137,69 @@ export const confirmEmailVerificationController: RequestHandler = async (
     res.status(200).json({
       requestId: req.requestId,
       user
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const requestPasswordResetController: RequestHandler = async (
+  req,
+  res,
+  next
+) => {
+  const parsedBody = passwordResetRequestSchema.safeParse(req.body);
+
+  if (!parsedBody.success) {
+    res.status(400).json({
+      error: {
+        code: "VALIDATION_ERROR",
+        details: toValidationDetails(parsedBody.error.issues),
+        message: "Invalid request body."
+      },
+      requestId: req.requestId
+    });
+    return;
+  }
+
+  try {
+    await requestPasswordReset(parsedBody.data, getRequestContext(req));
+
+    res.status(202).json({
+      message:
+        "If an active account matches that email, it may receive password reset instructions shortly.",
+      requestId: req.requestId
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const confirmPasswordResetController: RequestHandler = async (
+  req,
+  res,
+  next
+) => {
+  const parsedBody = passwordResetConfirmSchema.safeParse(req.body);
+
+  if (!parsedBody.success) {
+    res.status(400).json({
+      error: {
+        code: "VALIDATION_ERROR",
+        details: toValidationDetails(parsedBody.error.issues),
+        message: "Invalid request body."
+      },
+      requestId: req.requestId
+    });
+    return;
+  }
+
+  try {
+    await confirmPasswordReset(parsedBody.data, getRequestContext(req));
+
+    res.status(200).json({
+      message: "Password reset successfully. Please sign in again.",
+      requestId: req.requestId
     });
   } catch (error) {
     next(error);

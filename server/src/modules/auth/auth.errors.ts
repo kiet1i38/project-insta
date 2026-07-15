@@ -16,6 +16,14 @@ export const AUTH_EMAIL_VERIFICATION_RATE_LIMITED_CODE =
   "AUTH_EMAIL_VERIFICATION_RATE_LIMITED";
 export const AUTH_EMAIL_VERIFICATION_RATE_LIMITED_MESSAGE =
   "Too many verification attempts. Please try again later.";
+export const AUTH_PASSWORD_RESET_INVALID_OR_EXPIRED_CODE =
+  "AUTH_PASSWORD_RESET_INVALID_OR_EXPIRED";
+export const AUTH_PASSWORD_RESET_INVALID_OR_EXPIRED_MESSAGE =
+  "This password reset link is invalid or expired.";
+export const AUTH_PASSWORD_RESET_RATE_LIMITED_CODE =
+  "AUTH_PASSWORD_RESET_RATE_LIMITED";
+export const AUTH_PASSWORD_RESET_RATE_LIMITED_MESSAGE =
+  "Too many password reset attempts. Please try again later.";
 export const AUTH_IDENTIFIER_IN_USE_CODE = "AUTH_IDENTIFIER_IN_USE";
 export const AUTH_IDENTIFIER_IN_USE_MESSAGE =
   "Email or username is already in use.";
@@ -61,6 +69,22 @@ export function createEmailVerificationRateLimitedError(): AppError {
     429,
     AUTH_EMAIL_VERIFICATION_RATE_LIMITED_CODE,
     AUTH_EMAIL_VERIFICATION_RATE_LIMITED_MESSAGE
+  );
+}
+
+export function createPasswordResetInvalidOrExpiredError(): AppError {
+  return new AppError(
+    400,
+    AUTH_PASSWORD_RESET_INVALID_OR_EXPIRED_CODE,
+    AUTH_PASSWORD_RESET_INVALID_OR_EXPIRED_MESSAGE
+  );
+}
+
+export function createPasswordResetRateLimitedError(): AppError {
+  return new AppError(
+    429,
+    AUTH_PASSWORD_RESET_RATE_LIMITED_CODE,
+    AUTH_PASSWORD_RESET_RATE_LIMITED_MESSAGE
   );
 }
 
