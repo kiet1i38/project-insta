@@ -8,6 +8,7 @@ import { resolve } from "node:path";
 const DEMO_ADMIN_PASSWORD = process.env.DEMO_ADMIN_PASSWORD ?? "AdminDemo123!";
 const DEMO_USER_PASSWORD = process.env.DEMO_USER_PASSWORD ?? "UserDemo123!";
 const BCRYPT_ROUNDS = 10;
+const DEMO_EMAIL_VERIFIED_AT = new Date("2026-06-10T00:00:00.000Z");
 
 const demoIds = {
   adminUser: "10000000-0000-4000-8000-000000000001",
@@ -135,7 +136,9 @@ export type SeedSummary = {
   refreshTokens: number;
 };
 
-export async function seedDatabase(client: PrismaClient = prisma): Promise<SeedSummary> {
+export async function seedDatabase(
+  client: PrismaClient = prisma
+): Promise<SeedSummary> {
   const adminPasswordHash = await hash(DEMO_ADMIN_PASSWORD, BCRYPT_ROUNDS);
   const userPasswordHash = await hash(DEMO_USER_PASSWORD, BCRYPT_ROUNDS);
 
@@ -151,7 +154,9 @@ export async function seedDatabase(client: PrismaClient = prisma): Promise<SeedS
       });
     const demoConversationIds = [
       ...new Set(
-        demoConversationParticipants.map((participant) => participant.conversationId)
+        demoConversationParticipants.map(
+          (participant) => participant.conversationId
+        )
       )
     ];
 
@@ -248,10 +253,7 @@ export async function seedDatabase(client: PrismaClient = prisma): Promise<SeedS
             { actorId: { in: demoUserIds as unknown as string[] } },
             {
               id: {
-                in: [
-                  demoIds.guestAuditLog,
-                  demoIds.adminAuditLog
-                ]
+                in: [demoIds.guestAuditLog, demoIds.adminAuditLog]
               }
             }
           ]
@@ -275,6 +277,7 @@ export async function seedDatabase(client: PrismaClient = prisma): Promise<SeedS
       displayName: "CloneInsta Admin",
       bio: "Demo admin account for local moderation checks.",
       avatarUrl: demoAvatarUrls.admin,
+      emailVerifiedAt: DEMO_EMAIL_VERIFIED_AT,
       role: "ADMIN",
       status: "ACTIVE"
     },
@@ -286,6 +289,7 @@ export async function seedDatabase(client: PrismaClient = prisma): Promise<SeedS
       displayName: "CloneInsta Admin",
       bio: "Demo admin account for local moderation checks.",
       avatarUrl: demoAvatarUrls.admin,
+      emailVerifiedAt: DEMO_EMAIL_VERIFIED_AT,
       role: "ADMIN",
       status: "ACTIVE"
     }
@@ -299,6 +303,7 @@ export async function seedDatabase(client: PrismaClient = prisma): Promise<SeedS
       displayName: "Alice Demo",
       bio: "Demo photographer account.",
       avatarUrl: demoAvatarUrls.alice,
+      emailVerifiedAt: DEMO_EMAIL_VERIFIED_AT,
       role: "USER",
       status: "ACTIVE"
     },
@@ -310,6 +315,7 @@ export async function seedDatabase(client: PrismaClient = prisma): Promise<SeedS
       displayName: "Alice Demo",
       bio: "Demo photographer account.",
       avatarUrl: demoAvatarUrls.alice,
+      emailVerifiedAt: DEMO_EMAIL_VERIFIED_AT,
       role: "USER",
       status: "ACTIVE"
     }
@@ -323,6 +329,7 @@ export async function seedDatabase(client: PrismaClient = prisma): Promise<SeedS
       displayName: "Bob Demo",
       bio: "Demo community account.",
       avatarUrl: demoAvatarUrls.bob,
+      emailVerifiedAt: DEMO_EMAIL_VERIFIED_AT,
       role: "USER",
       status: "ACTIVE"
     },
@@ -334,6 +341,7 @@ export async function seedDatabase(client: PrismaClient = prisma): Promise<SeedS
       displayName: "Bob Demo",
       bio: "Demo community account.",
       avatarUrl: demoAvatarUrls.bob,
+      emailVerifiedAt: DEMO_EMAIL_VERIFIED_AT,
       role: "USER",
       status: "ACTIVE"
     }
@@ -380,7 +388,8 @@ export async function seedDatabase(client: PrismaClient = prisma): Promise<SeedS
     update: {
       postId: demoIds.alicePost,
       authorId: demoIds.bobUser,
-      content: "Nice framing. Keeping this comment for moderation/report test flows.",
+      content:
+        "Nice framing. Keeping this comment for moderation/report test flows.",
       isHidden: false,
       deletedAt: null
     },
@@ -388,7 +397,8 @@ export async function seedDatabase(client: PrismaClient = prisma): Promise<SeedS
       id: demoIds.bobCommentOnAlicePost,
       postId: demoIds.alicePost,
       authorId: demoIds.bobUser,
-      content: "Nice framing. Keeping this comment for moderation/report test flows.",
+      content:
+        "Nice framing. Keeping this comment for moderation/report test flows.",
       isHidden: false
     }
   });
@@ -535,18 +545,27 @@ export async function seedDatabase(client: PrismaClient = prisma): Promise<SeedS
     }
   });
 
-  const [users, posts, comments, likes, follows, reports, moderationActions, auditLogs, refreshTokens] =
-    await Promise.all([
-      client.user.count(),
-      client.post.count(),
-      client.comment.count(),
-      client.like.count(),
-      client.follow.count(),
-      client.report.count(),
-      client.moderationAction.count(),
-      client.auditLog.count(),
-      client.refreshToken.count()
-    ]);
+  const [
+    users,
+    posts,
+    comments,
+    likes,
+    follows,
+    reports,
+    moderationActions,
+    auditLogs,
+    refreshTokens
+  ] = await Promise.all([
+    client.user.count(),
+    client.post.count(),
+    client.comment.count(),
+    client.like.count(),
+    client.follow.count(),
+    client.report.count(),
+    client.moderationAction.count(),
+    client.auditLog.count(),
+    client.refreshToken.count()
+  ]);
 
   return {
     users,
@@ -567,8 +586,12 @@ async function runSeedCli(): Promise<void> {
   console.log("CloneInsta demo seed completed.");
   console.log(JSON.stringify(summary, null, 2));
   console.log("Demo accounts:");
-  console.log(`- admin_demo / ${DEMO_ADMIN_PASSWORD} (admin@cloneinsta.example)`);
-  console.log(`- alice_demo / ${DEMO_USER_PASSWORD} (alice@cloneinsta.example)`);
+  console.log(
+    `- admin_demo / ${DEMO_ADMIN_PASSWORD} (admin@cloneinsta.example)`
+  );
+  console.log(
+    `- alice_demo / ${DEMO_USER_PASSWORD} (alice@cloneinsta.example)`
+  );
   console.log(`- bob_demo / ${DEMO_USER_PASSWORD} (bob@cloneinsta.example)`);
 }
 

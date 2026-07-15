@@ -8,8 +8,17 @@ export const AUTH_FORBIDDEN_CODE = "AUTH_FORBIDDEN";
 export const AUTH_FORBIDDEN_MESSAGE = "Forbidden.";
 export const AUTH_EMAIL_IN_USE_CODE = "AUTH_EMAIL_IN_USE";
 export const AUTH_EMAIL_IN_USE_MESSAGE = "Email is already in use.";
+export const AUTH_EMAIL_VERIFICATION_INVALID_OR_EXPIRED_CODE =
+  "AUTH_EMAIL_VERIFICATION_INVALID_OR_EXPIRED";
+export const AUTH_EMAIL_VERIFICATION_INVALID_OR_EXPIRED_MESSAGE =
+  "This verification link is invalid or expired.";
+export const AUTH_EMAIL_VERIFICATION_RATE_LIMITED_CODE =
+  "AUTH_EMAIL_VERIFICATION_RATE_LIMITED";
+export const AUTH_EMAIL_VERIFICATION_RATE_LIMITED_MESSAGE =
+  "Too many verification attempts. Please try again later.";
 export const AUTH_IDENTIFIER_IN_USE_CODE = "AUTH_IDENTIFIER_IN_USE";
-export const AUTH_IDENTIFIER_IN_USE_MESSAGE = "Email or username is already in use.";
+export const AUTH_IDENTIFIER_IN_USE_MESSAGE =
+  "Email or username is already in use.";
 export const AUTH_INVALID_SESSION_CODE = "AUTH_INVALID_SESSION";
 export const AUTH_INVALID_SESSION_MESSAGE = "Invalid session.";
 export const AUTH_ORIGIN_FORBIDDEN_CODE = "AUTH_ORIGIN_FORBIDDEN";
@@ -37,6 +46,22 @@ export function createForbiddenError(): AppError {
 
 export function createEmailInUseError(): AppError {
   return new AppError(409, AUTH_EMAIL_IN_USE_CODE, AUTH_EMAIL_IN_USE_MESSAGE);
+}
+
+export function createEmailVerificationInvalidOrExpiredError(): AppError {
+  return new AppError(
+    400,
+    AUTH_EMAIL_VERIFICATION_INVALID_OR_EXPIRED_CODE,
+    AUTH_EMAIL_VERIFICATION_INVALID_OR_EXPIRED_MESSAGE
+  );
+}
+
+export function createEmailVerificationRateLimitedError(): AppError {
+  return new AppError(
+    429,
+    AUTH_EMAIL_VERIFICATION_RATE_LIMITED_CODE,
+    AUTH_EMAIL_VERIFICATION_RATE_LIMITED_MESSAGE
+  );
 }
 
 export function createUsernameInUseError(): AppError {
@@ -72,9 +97,5 @@ export function createOriginForbiddenError(): AppError {
 }
 
 export function createUnauthorizedError(): AppError {
-  return new AppError(
-    401,
-    AUTH_UNAUTHORIZED_CODE,
-    AUTH_UNAUTHORIZED_MESSAGE
-  );
+  return new AppError(401, AUTH_UNAUTHORIZED_CODE, AUTH_UNAUTHORIZED_MESSAGE);
 }

@@ -1,4 +1,5 @@
 import { AppError } from "../../lib/appError.js";
+import type { UserStatus } from "../../generated/prisma/client.js";
 import type {
   SearchUsersQueryInput,
   UpdateOwnProfileInput
@@ -30,7 +31,7 @@ type OwnProfileDto = {
   email: string;
   id: string;
   role: "USER" | "ADMIN";
-  status: "ACTIVE" | "BANNED";
+  status: UserStatus;
   updatedAt: Date;
   username: string;
 };
@@ -292,7 +293,9 @@ export async function searchUsers(
       hasNextPage,
       limit: input.limit,
       nextCursor:
-        hasNextPage && lastVisibleUser ? encodeSearchCursor(lastVisibleUser) : null,
+        hasNextPage && lastVisibleUser
+          ? encodeSearchCursor(lastVisibleUser)
+          : null,
       query: input.q
     },
     users: visibleUsers.map(toSearchUserDto)

@@ -1,11 +1,11 @@
-import type { Prisma } from "../../generated/prisma/client.js";
+import type { Prisma, UserStatus } from "../../generated/prisma/client.js";
 import { listAuditLogs, type AuditLogRecord } from "./audit.repository.js";
 import type { ListAuditLogsQueryInput } from "./audit.schema.js";
 
 type AuditActorDto = {
   id: string;
   role: "ADMIN" | "USER";
-  status: "ACTIVE" | "BANNED";
+  status: UserStatus;
   username: string;
 };
 
@@ -112,7 +112,9 @@ export async function getAuditLogs(
 ): Promise<AuditLogListResultDto> {
   const auditLogs = await listAuditLogs(input);
   const hasNextPage = auditLogs.length > input.limit;
-  const pageAuditLogs = hasNextPage ? auditLogs.slice(0, input.limit) : auditLogs;
+  const pageAuditLogs = hasNextPage
+    ? auditLogs.slice(0, input.limit)
+    : auditLogs;
   const lastAuditLog = pageAuditLogs.at(-1);
 
   return {
@@ -120,12 +122,13 @@ export async function getAuditLogs(
     pageInfo: {
       hasNextPage,
       limit: input.limit,
-      nextCursor: hasNextPage && lastAuditLog
-        ? encodeAuditCursor({
-            createdAt: lastAuditLog.createdAt.toISOString(),
-            id: lastAuditLog.id
-          })
-        : null
+      nextCursor:
+        hasNextPage && lastAuditLog
+          ? encodeAuditCursor({
+              createdAt: lastAuditLog.createdAt.toISOString(),
+              id: lastAuditLog.id
+            })
+          : null
     }
   };
 }

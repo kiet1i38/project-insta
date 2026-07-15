@@ -78,6 +78,8 @@ describe("core Prisma schema", () => {
         AND table_name IN (
           'User',
           'RefreshToken',
+          'ActionToken',
+          'AuthActionAttempt',
           'Conversation',
           'ConversationParticipant',
           'ConversationReadState',
@@ -94,7 +96,9 @@ describe("core Prisma schema", () => {
     `;
 
     expect(tables.map((table) => table.table_name).sort()).toEqual([
+      "ActionToken",
       "AuditLog",
+      "AuthActionAttempt",
       "Comment",
       "Conversation",
       "ConversationParticipant",
@@ -223,7 +227,9 @@ describe("core Prisma schema", () => {
       FROM pg_indexes
       WHERE schemaname = 'public'
         AND (
-          (tablename = 'Report' AND indexname IN ('Report_status_createdAt_idx', 'Report_reporterId_idx'))
+          (tablename = 'ActionToken' AND indexname IN ('ActionToken_tokenHash_key', 'ActionToken_userId_purpose_consumedAt_idx'))
+          OR (tablename = 'AuthActionAttempt' AND indexname IN ('AuthActionAttempt_type_emailHash_createdAt_idx', 'AuthActionAttempt_type_ipHash_createdAt_idx'))
+          OR (tablename = 'Report' AND indexname IN ('Report_status_createdAt_idx', 'Report_reporterId_idx'))
           OR (tablename = 'ModerationAction' AND indexname IN ('ModerationAction_reportId_createdAt_idx', 'ModerationAction_adminId_idx'))
           OR (tablename = 'AuditLog' AND indexname IN ('AuditLog_action_idx', 'AuditLog_entityType_entityId_idx'))
         )
@@ -231,6 +237,22 @@ describe("core Prisma schema", () => {
 
     expect(safetyIndexes).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({
+          indexname: "ActionToken_tokenHash_key",
+          indexdef: expect.stringContaining(`("tokenHash")`)
+        }),
+        expect.objectContaining({
+          indexname: "ActionToken_userId_purpose_consumedAt_idx",
+          indexdef: expect.stringContaining(`("userId", purpose, "consumedAt")`)
+        }),
+        expect.objectContaining({
+          indexname: "AuthActionAttempt_type_emailHash_createdAt_idx",
+          indexdef: expect.stringContaining(`(type, "emailHash", "createdAt")`)
+        }),
+        expect.objectContaining({
+          indexname: "AuthActionAttempt_type_ipHash_createdAt_idx",
+          indexdef: expect.stringContaining(`(type, "ipHash", "createdAt")`)
+        }),
         expect.objectContaining({
           indexname: "Report_status_createdAt_idx",
           indexdef: expect.stringContaining(`(status, "createdAt")`)

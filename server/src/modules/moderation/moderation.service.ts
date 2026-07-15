@@ -1,4 +1,4 @@
-import type { Prisma } from "../../generated/prisma/client.js";
+import type { Prisma, UserStatus } from "../../generated/prisma/client.js";
 import { prisma } from "../../db/prisma.js";
 import { AppError } from "../../lib/appError.js";
 import {
@@ -53,7 +53,7 @@ type ModerationReportDto = {
     user: {
       displayName: string | null;
       id: string;
-      status: "ACTIVE" | "BANNED";
+      status: UserStatus;
       username: string;
     } | null;
   };
@@ -154,7 +154,9 @@ function getReportTargetInfo(report: ModerationReportRecord) {
   throw createModerationReportNotFoundError();
 }
 
-function toModerationReportDto(report: ModerationReportRecord): ModerationReportDto {
+function toModerationReportDto(
+  report: ModerationReportRecord
+): ModerationReportDto {
   if (report.reportedPost) {
     return {
       createdAt: report.createdAt,
@@ -270,12 +272,13 @@ export async function getModerationReports(
     pageInfo: {
       hasNextPage,
       limit: input.limit,
-      nextCursor: hasNextPage && lastReport
-        ? encodeModerationCursor({
-            createdAt: lastReport.createdAt.toISOString(),
-            id: lastReport.id
-          })
-        : null
+      nextCursor:
+        hasNextPage && lastReport
+          ? encodeModerationCursor({
+              createdAt: lastReport.createdAt.toISOString(),
+              id: lastReport.id
+            })
+          : null
     },
     reports: pageReports.map(toModerationReportDto),
     summary: {

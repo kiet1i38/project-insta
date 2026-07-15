@@ -6,33 +6,53 @@ const defaultDatabaseUrl =
 const defaultTestDatabaseUrl =
   "postgresql://cloneinsta:cloneinsta_dev_password@localhost:5432/cloneinsta_test?schema=public";
 
-const envSchema = z.object({
-  ACCESS_TOKEN_SECRET: z
-    .string()
-    .min(32)
-    .default("cloneinsta_local_access_token_secret_change_me_123"),
-  ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
-  REFRESH_TOKEN_SECRET: z
-    .string()
-    .min(32)
-    .default("cloneinsta_local_refresh_token_secret_change_me_123"),
-  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(7),
-  NODE_ENV: z
-    .enum(["development", "test", "production"])
-    .default("development"),
-  PORT: z.coerce.number().int().positive().default(3001),
-  CLIENT_ORIGIN: z.string().url().default("http://localhost:5173"),
-  DATABASE_URL: z.string().url().default(defaultDatabaseUrl),
-  TEST_DATABASE_URL: z.string().url().default(defaultTestDatabaseUrl),
-  LOCAL_UPLOAD_DIR: z.string().default("server/uploads"),
-  SMTP_HOST: z.string().trim().min(1).default("localhost"),
-  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(1025),
-  SMTP_SECURE: z
-    .enum(["true", "false"])
-    .default("false")
-    .transform((value) => value === "true"),
-  SMTP_FROM: z.string().email().default("noreply@cloneinsta.local")
-});
+const envSchema = z
+  .object({
+    ACCESS_TOKEN_SECRET: z
+      .string()
+      .min(32)
+      .default("cloneinsta_local_access_token_secret_change_me_123"),
+    ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+    REFRESH_TOKEN_SECRET: z
+      .string()
+      .min(32)
+      .default("cloneinsta_local_refresh_token_secret_change_me_123"),
+    REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(7),
+    ACCOUNT_ACTION_RATE_LIMIT_SECRET: z
+      .string()
+      .min(32)
+      .default(
+        "cloneinsta_local_account_action_rate_limit_secret_change_me_123"
+      ),
+    NODE_ENV: z
+      .enum(["development", "test", "production"])
+      .default("development"),
+    PORT: z.coerce.number().int().positive().default(3001),
+    CLIENT_ORIGIN: z.string().url().default("http://localhost:5173"),
+    PUBLIC_APP_URL: z.string().url().default("http://localhost:5173"),
+    DATABASE_URL: z.string().url().default(defaultDatabaseUrl),
+    TEST_DATABASE_URL: z.string().url().default(defaultTestDatabaseUrl),
+    LOCAL_UPLOAD_DIR: z.string().default("server/uploads"),
+    SMTP_HOST: z.string().trim().min(1).default("localhost"),
+    SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(1025),
+    SMTP_SECURE: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    SMTP_FROM: z.string().email().default("noreply@cloneinsta.local")
+  })
+  .superRefine((environment, context) => {
+    if (
+      environment.NODE_ENV === "production" &&
+      new URL(environment.PUBLIC_APP_URL).protocol !== "https:"
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "PUBLIC_APP_URL must use HTTPS in production.",
+        path: ["PUBLIC_APP_URL"]
+      });
+    }
+  });
 
 export function parseEnvironment(environment: NodeJS.ProcessEnv = process.env) {
   return envSchema.parse(environment);

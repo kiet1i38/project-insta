@@ -21,11 +21,15 @@ const managedTables = [
   `"Comment"`,
   `"Post"`,
   `"RefreshToken"`,
+  `"ActionToken"`,
+  `"AuthActionAttempt"`,
   `"User"`
 ].join(", ");
 
 export async function resetDatabaseTables(client: PrismaClient): Promise<void> {
-  await client.$executeRawUnsafe(`TRUNCATE TABLE ${managedTables} RESTART IDENTITY CASCADE`);
+  await client.$executeRawUnsafe(
+    `TRUNCATE TABLE ${managedTables} RESTART IDENTITY CASCADE`
+  );
 }
 
 export function runRepoScript(

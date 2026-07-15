@@ -1,4 +1,12 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it
+} from "vitest";
 import { prisma } from "./prisma.js";
 import { resetDatabaseTables, runRepoScript } from "../test/testDatabase.js";
 
@@ -26,20 +34,31 @@ describe.sequential("database seed", () => {
 
     expect(firstSeed.status).toBe(0);
 
-    const [users, posts, comments, likes, follows, reports, moderationActions, auditLogs, refreshTokens, conversations, messages] =
-      await Promise.all([
-        prisma.user.count(),
-        prisma.post.count(),
-        prisma.comment.count(),
-        prisma.like.count(),
-        prisma.follow.count(),
-        prisma.report.count(),
-        prisma.moderationAction.count(),
-        prisma.auditLog.count(),
-        prisma.refreshToken.count(),
-        prisma.conversation.count(),
-        prisma.message.count()
-      ]);
+    const [
+      users,
+      posts,
+      comments,
+      likes,
+      follows,
+      reports,
+      moderationActions,
+      auditLogs,
+      refreshTokens,
+      conversations,
+      messages
+    ] = await Promise.all([
+      prisma.user.count(),
+      prisma.post.count(),
+      prisma.comment.count(),
+      prisma.like.count(),
+      prisma.follow.count(),
+      prisma.report.count(),
+      prisma.moderationAction.count(),
+      prisma.auditLog.count(),
+      prisma.refreshToken.count(),
+      prisma.conversation.count(),
+      prisma.message.count()
+    ]);
 
     expect({
       users,
@@ -80,6 +99,7 @@ describe.sequential("database seed", () => {
 
     expect(adminUser).toMatchObject({
       email: "admin@cloneinsta.example",
+      emailVerifiedAt: expect.any(Date),
       username: "admin_demo",
       role: "ADMIN",
       status: "ACTIVE"
@@ -88,6 +108,7 @@ describe.sequential("database seed", () => {
     expect(adminUser?.passwordHash).not.toBe("AdminDemo123!");
     expect(adminUser?.passwordHash).toMatch(/^\$2[aby]\$/);
     expect(adminUser?.avatarUrl).toMatch(/^data:image\/svg\+xml;/);
+    expect(aliceUser?.emailVerifiedAt).toEqual(expect.any(Date));
     expect(aliceUser?.avatarUrl).toMatch(/^data:image\/svg\+xml;/);
 
     const pendingReport = await prisma.report.findFirst({
@@ -112,7 +133,8 @@ describe.sequential("database seed", () => {
     await prisma.comment.create({
       data: {
         authorId: "10000000-0000-4000-8000-000000000002",
-        content: "Local browser smoke comment that the next seed should remove.",
+        content:
+          "Local browser smoke comment that the next seed should remove.",
         id: "30000000-0000-4000-8000-000000000099",
         postId: "20000000-0000-4000-8000-000000000001"
       }
@@ -139,7 +161,8 @@ describe.sequential("database seed", () => {
     await prisma.post.create({
       data: {
         authorId: "10000000-0000-4000-8000-000000000002",
-        caption: "Local create-post smoke artifact that the next seed should remove.",
+        caption:
+          "Local create-post smoke artifact that the next seed should remove.",
         id: "20000000-0000-4000-8000-000000000099",
         imageUrl: "/uploads/local-smoke-post.png"
       }
@@ -152,7 +175,8 @@ describe.sequential("database seed", () => {
         id: "80000000-0000-4000-8000-000000000001",
         messages: {
           create: {
-            content: "Local chat smoke artifact that the next seed should remove.",
+            content:
+              "Local chat smoke artifact that the next seed should remove.",
             createdAt: new Date("2026-07-10T00:00:00.000Z"),
             id: "81000000-0000-4000-8000-000000000001",
             senderId: "10000000-0000-4000-8000-000000000003"

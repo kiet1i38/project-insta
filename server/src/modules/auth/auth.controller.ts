@@ -1,5 +1,10 @@
 import type { RequestHandler } from "express";
-import { loginSchema, registerSchema } from "./auth.schema.js";
+import {
+  emailVerificationConfirmSchema,
+  emailVerificationRequestSchema,
+  loginSchema,
+  registerSchema
+} from "./auth.schema.js";
 import {
   clearCsrfTokenCookie,
   issueCsrfToken,
@@ -11,17 +16,34 @@ import {
   setRefreshTokenCookie
 } from "./refreshToken.js";
 import {
+  confirmEmailVerification,
   loginUser,
   logoutUserSession,
+  requestEmailVerification,
   refreshUserSession,
   registerUser
 } from "./auth.service.js";
 
-function toValidationDetails(issues: Array<{ message: string; path: PropertyKey[] }>) {
+function toValidationDetails(
+  issues: Array<{ message: string; path: PropertyKey[] }>
+) {
   return issues.map((issue) => ({
     message: issue.message,
     path: issue.path.join(".")
   }));
+}
+
+function getRequestContext(req: Parameters<RequestHandler>[0]) {
+  const userAgentHeader = req.headers["user-agent"];
+  const userAgent = Array.isArray(userAgentHeader)
+    ? userAgentHeader[0]
+    : userAgentHeader;
+
+  return {
+    ipAddress: (req.ip ?? "").slice(0, 45),
+    requestId: req.requestId,
+    userAgent: userAgent ? userAgent.slice(0, 512) : null
+  };
 }
 
 export const registerController: RequestHandler = async (req, res, next) => {
@@ -40,9 +62,75 @@ export const registerController: RequestHandler = async (req, res, next) => {
   }
 
   try {
-    const user = await registerUser(parsedBody.data);
+    const user = await registerUser(parsedBody.data, getRequestContext(req));
 
     res.status(201).json({
+      requestId: req.requestId,
+      user
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const requestEmailVerificationController: RequestHandler = async (
+  req,
+  res,
+  next
+) => {
+  const parsedBody = emailVerificationRequestSchema.safeParse(req.body);
+
+  if (!parsedBody.success) {
+    res.status(400).json({
+      error: {
+        code: "VALIDATION_ERROR",
+        details: toValidationDetails(parsedBody.error.issues),
+        message: "Invalid request body."
+      },
+      requestId: req.requestId
+    });
+    return;
+  }
+
+  try {
+    await requestEmailVerification(parsedBody.data, getRequestContext(req));
+
+    res.status(202).json({
+      message:
+        "If an unverified account matches that email, it may receive a verification email shortly.",
+      requestId: req.requestId
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const confirmEmailVerificationController: RequestHandler = async (
+  req,
+  res,
+  next
+) => {
+  const parsedBody = emailVerificationConfirmSchema.safeParse(req.body);
+
+  if (!parsedBody.success) {
+    res.status(400).json({
+      error: {
+        code: "VALIDATION_ERROR",
+        details: toValidationDetails(parsedBody.error.issues),
+        message: "Invalid request body."
+      },
+      requestId: req.requestId
+    });
+    return;
+  }
+
+  try {
+    const user = await confirmEmailVerification(
+      parsedBody.data,
+      getRequestContext(req)
+    );
+
+    res.status(200).json({
       requestId: req.requestId,
       user
     });
@@ -74,11 +162,7 @@ export const loginController: RequestHandler = async (req, res, next) => {
       result.refreshToken,
       result.refreshTokenExpiresAt
     );
-    setCsrfTokenCookie(
-      res,
-      issueCsrfToken(),
-      result.refreshTokenExpiresAt
-    );
+    setCsrfTokenCookie(res, issueCsrfToken(), result.refreshTokenExpiresAt);
 
     res.status(200).json({
       accessToken: result.accessToken,
@@ -100,11 +184,7 @@ export const refreshController: RequestHandler = async (req, res, next) => {
       result.refreshToken,
       result.refreshTokenExpiresAt
     );
-    setCsrfTokenCookie(
-      res,
-      issueCsrfToken(),
-      result.refreshTokenExpiresAt
-    );
+    setCsrfTokenCookie(res, issueCsrfToken(), result.refreshTokenExpiresAt);
 
     res.status(200).json({
       accessToken: result.accessToken,

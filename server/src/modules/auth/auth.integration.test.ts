@@ -1,17 +1,21 @@
 import request from "supertest";
+import { afterEach, vi } from "vitest";
 import { app } from "../../app.js";
 import { prisma } from "../../db/prisma.js";
 import { resetDatabaseTables } from "../../test/testDatabase.js";
+import { mailService } from "../mail/mail.service.js";
 import { AUTH_INVALID_CREDENTIALS_MESSAGE } from "./auth.errors.js";
 import { hashPassword, verifyPassword } from "./password.js";
 
-async function createUserFixture(overrides: {
-  email?: string;
-  username?: string;
-  displayName?: string;
-  password?: string;
-  status?: "ACTIVE" | "BANNED";
-} = {}) {
+async function createUserFixture(
+  overrides: {
+    email?: string;
+    username?: string;
+    displayName?: string;
+    password?: string;
+    status?: "ACTIVE" | "BANNED";
+  } = {}
+) {
   const password = overrides.password ?? "Password123!";
   const passwordHash = await hashPassword(password);
 
@@ -31,9 +35,14 @@ async function createUserFixture(overrides: {
 describe("auth register/login API", () => {
   beforeEach(async () => {
     await resetDatabaseTables(prisma);
+    vi.spyOn(mailService, "sendMail").mockResolvedValue();
   });
 
-  test("POST /api/v1/auth/register creates an active user with a hashed password", async () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  test("POST /api/v1/auth/register creates a pending user with a hashed password", async () => {
     const response = await request(app).post("/api/v1/auth/register").send({
       displayName: "  Alice Demo  ",
       username: "  Alice_Demo  ",
@@ -50,7 +59,8 @@ describe("auth register/login API", () => {
       username: "alice_demo",
       displayName: "Alice Demo",
       role: "USER",
-      status: "ACTIVE"
+      status: "PENDING_VERIFICATION",
+      emailVerifiedAt: null
     });
     expect(response.body.user.passwordHash).toBeUndefined();
 

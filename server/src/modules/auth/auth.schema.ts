@@ -27,7 +27,8 @@ const usernameSchema = z
   .max(30, "Username must be 30 characters or fewer.")
   .transform((value) => value.toLowerCase())
   .refine((value) => usernamePattern.test(value), {
-    message: "Username may contain only lowercase letters, numbers, dots, and underscores."
+    message:
+      "Username may contain only lowercase letters, numbers, dots, and underscores."
   })
   .refine((value) => !reservedUsernames.has(value), {
     message: "Username is reserved."
@@ -73,5 +74,29 @@ export const loginSchema = z.object({
     .max(72, "Password must be 72 characters or fewer.")
 });
 
+const emailSchema = z
+  .string()
+  .trim()
+  .email("Email must be valid.")
+  .transform((value) => value.toLowerCase());
+
+export const emailVerificationRequestSchema = z.object({
+  email: emailSchema
+});
+
+export const emailVerificationConfirmSchema = z.object({
+  token: z
+    .string()
+    .trim()
+    .min(1, "Verification token is required.")
+    .max(200, "Verification token is invalid.")
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type EmailVerificationRequestInput = z.infer<
+  typeof emailVerificationRequestSchema
+>;
+export type EmailVerificationConfirmInput = z.infer<
+  typeof emailVerificationConfirmSchema
+>;

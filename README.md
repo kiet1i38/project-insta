@@ -6,7 +6,7 @@ It is designed to be easy to run locally, demonstrate safely, and explain in an 
 
 ## Highlights
 
-- Secure registration, login, short-lived access tokens, rotating HttpOnly refresh cookies, CSRF checks, and role guards.
+- Pending-email registration, local Mailpit verification, login after activation, short-lived access tokens, rotating HttpOnly refresh cookies, CSRF checks, and role guards.
 - Profile editing, safe user search, follow/block controls, image posts, cursor-paginated feed, likes, and comments.
 - Report submission, moderation queue, safe audit logs, and admin-only actions.
 - Direct messaging with REST persistence, Socket.IO updates, message requests, read state, rate limits, block safety, and user-report hooks.
@@ -71,6 +71,17 @@ Open the app at [http://localhost:5173](http://localhost:5173). The API health e
 
 The default local values in the example environment files use the Docker Compose PostgreSQL database. Do not commit the copied `.env` files.
 
+## Local email verification (M11B)
+
+New registrations are created as `PENDING_VERIFICATION`; they cannot sign in until their email address is confirmed. Registration sends the local verification message to Mailpit, not to a public inbox.
+
+1. Start Mailpit and the API, then register through Postman or `POST /api/v1/auth/register`.
+2. Open [Mailpit](http://localhost:8025), open **Verify your CloneInsta email**, and copy the `token` query value from the message link.
+3. Send that value to `POST /api/v1/auth/email-verification/confirm` as `{ "token": "..." }`.
+4. The response returns the safe user DTO with `status: "ACTIVE"` and `emailVerifiedAt`; normal login can then proceed.
+
+The email link is deliberately built from `PUBLIC_APP_URL` (local default: `http://localhost:5173`) rather than the inbound request host. M11B does not yet include a `/verify-email` browser page, so use the confirmation endpoint or the Postman request after copying the token. Password reset is also outside this slice.
+
 ## Demo accounts
 
 After `npm run db:seed`, use these local-only accounts:
@@ -112,9 +123,10 @@ The Prisma-backed server suites share `cloneinsta_test`, so do not run multiple 
 
 ## API and realtime demo
 
-Import [docs/postman_collection.json](docs/postman_collection.json) into Postman. It contains 38 practical requests covering all 34 implemented REST method/path contracts, including:
+Import [docs/postman_collection.json](docs/postman_collection.json) into Postman. It contains 40 practical requests covering all 37 implemented REST method/path contracts, including:
 
-- Demo login helpers that save the access token.
+- Pending registration plus request/resend and confirm-email verification helpers for local Mailpit.
+- Demo login helpers that save the access token after email verification.
 - Cookie, Origin, and CSRF requirements for refresh/logout.
 - User, post/comment, report, admin/audit, and conversation endpoints.
 - Request folders, block safety, and report-user behavior for direct messages.
@@ -135,7 +147,10 @@ route -> controller -> Zod schema -> service -> repository -> Prisma/PostgreSQL
 - Safe DTOs avoid returning password hashes, refresh tokens, or private audit metadata.
 - Refresh tokens are hashed in PostgreSQL and delivered only through HttpOnly cookies. Refresh and logout also require allowed-origin and CSRF checks.
 - Reports and sensitive messaging actions produce minimal audit metadata; direct-message text is never copied into a moderation report audit entry.
-- The mail boundary validates SMTP settings, keeps delivery failures generic, and writes no recipient, token, URL, or provider-error text to its failure log. `mail:verify` proves the local Mailpit path without adding an HTTP endpoint.
+- New registrations are transactional: the account is `PENDING_VERIFICATION`, its 24-hour one-time verification token is SHA-256-hashed at rest, and no access or refresh session is issued until activation.
+- `POST /api/v1/auth/email-verification/request` is enumeration-safe: known pending and unknown/active addresses receive the same `202` response. A resend consumes older unused verification tokens before issuing a replacement.
+- Email confirmation is atomic, activates the pending account only once, and keeps raw emails, tokens, verification URLs, and SMTP/provider errors out of audit metadata and failure logs. `mail:verify` remains a separate SMTP/Mailpit boundary proof.
+- `PUBLIC_APP_URL` is the trusted base for email links (HTTPS is required in production). `ACCOUNT_ACTION_RATE_LIMIT_SECRET` HMAC-hashes email/IP rate-limit keys: verification requests are limited to 3 per 15 minutes per email and IP; confirmations are limited to 10 per 15 minutes per IP.
 
 See `instruction.html` locally for the student-focused explanation of the data flow, testing strategy, edge cases, and defense notes. `flag.md` and `plan.md` are intentionally local checkpoint files and are not part of the GitHub repository.
 
@@ -145,4 +160,4 @@ GitHub Actions runs `npm ci`, Prisma validation, test-database migrations, lint,
 
 ## Scope
 
-CloneInsta is GitHub-ready and local-run first. The account-lifecycle milestone is in progress: its local SMTP/Mailpit foundation exists, while email-verification and password-reset persistence, routes, and UI are still pending. It is not presented as a production deployment: hosted infrastructure, notifications, private accounts, and broader social features remain outside the current project scope.
+CloneInsta is GitHub-ready and local-run first. M11B implements the backend email-verification lifecycle and local Mailpit flow; a browser verification screen and password reset are deliberately not included yet. It is not presented as a production deployment: Mailpit does not relay to public inboxes, and hosted infrastructure, notifications, private accounts, and broader social features remain outside the current project scope.

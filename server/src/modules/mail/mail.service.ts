@@ -7,14 +7,14 @@ export type MailTransport = Pick<Transporter, "sendMail">;
 
 type MailLogger = Pick<Console, "error">;
 
-type MailMessage = {
+export type MailMessage = {
   html?: string;
   subject: string;
   text: string;
   to: string;
 };
 
-type MailService = {
+export type MailService = {
   sendMail(message: MailMessage): Promise<void>;
 };
 
